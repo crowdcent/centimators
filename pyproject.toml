@@ -20,4 +20,5 @@ build-backend = "hatchling.build"
 [tool.uv]
 dev-dependencies = [
     "marimo>=0.13.7",
+    "watchdog>=6.0.0",
 ]
