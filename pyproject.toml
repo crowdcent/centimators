@@ -1,0 +1,23 @@
+[project]
+name = "centimators"
+version = "0.1.0"
+description = "centimators: custom, shareable data transformers and model estimators for data science competitions"
+readme = "README.md"
+authors = [
+    { name = "jrosenfeld13", email = "jason@crowdcent.com" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "keras>=3.9.2",
+    "narwhals>=1.39.0",
+    "scikit-learn>=1.6.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = [
+    "marimo>=0.13.7",
+]
