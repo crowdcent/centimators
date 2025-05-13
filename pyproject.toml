@@ -20,6 +20,9 @@ build-backend = "hatchling.build"
 [tool.uv]
 dev-dependencies = [
     "marimo>=0.13.7",
+    "numpy>=2.2.5",
+    "pandas>=2.2.3",
+    "polars>=1.29.0",
     "ruff>=0.11.9",
     "watchdog>=6.0.0",
 ]

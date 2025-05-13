@@ -1,4 +1,4 @@
-<img src="/assets/centimators_banner.png" alt="Centimators" width="100%" style="max-width: 800px;"/>
+<img src="/assets/centimators_banner_transparent_thin.png" alt="Centimators" width="100%" style="max-width: 800px;"/>
 
 # Centimators: essential data transformers and model estimators for ML and data science competitions
 
