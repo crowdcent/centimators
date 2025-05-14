@@ -4,7 +4,42 @@ from sklearn.base import BaseEstimator, TransformerMixin
 import polars as pl
 
 
-class RankTransformer(TransformerMixin, BaseEstimator):
+def _attach_group(X: FrameT, series: IntoSeries, default_name: str):
+    """Attach *series* to *X* if supplied and return *(X, col_name)*.
+    """
+    if series is not None:
+        X = X.with_columns(series)
+        return X, series.name
+    # Series not provided – assume it already exists on the frame
+    return X, default_name
+
+
+class _BaseFeatureTransformer(TransformerMixin, BaseEstimator):
+    """Common plumbing for the feature transformers in this module.
+
+    * Stores *feature_names* (if given) and infers them during ``fit``.
+    * Implements a generic ``fit_transform`` that forwards any extra
+      keyword arguments to ``transform`` – this means subclasses only
+      need to implement ``transform`` and (optionally) override
+      ``get_feature_names_out``.
+    """
+
+    def __init__(self, feature_names: list[str] | None = None):
+        self.feature_names = feature_names
+
+    def fit(self, X: FrameT, y=None):
+        if self.feature_names is None:
+            self.feature_names = X.columns
+        return self
+
+    # Accept **kwargs so subclasses can expose arbitrary metadata
+    # (e.g. *date_series* or *ticker_series*) without re-implementing
+    # boiler-plate.
+    def fit_transform(self, X: FrameT, y=None, **kwargs):
+        return self.fit(X, y).transform(X, y, **kwargs)
+
+
+class RankTransformer(_BaseFeatureTransformer):
     """
     RankTransformer transforms features into their normalized rank within groups defined by a date series.
 
@@ -16,7 +51,7 @@ class RankTransformer(TransformerMixin, BaseEstimator):
     Examples
     --------
     >>> import pandas as pd
-    >>> from centimators.data_transformers import RankTransformer
+    >>> from centimators.feature_transformers import RankTransformer
     >>> df = pd.DataFrame({
     ...     'date': ['2021-01-01', '2021-01-01', '2021-01-02'],
     ...     'feature1': [3, 1, 2],
@@ -32,17 +67,11 @@ class RankTransformer(TransformerMixin, BaseEstimator):
     """
 
     def __init__(self, feature_names=None):
-        self.feature_names = feature_names
-
-    def fit(self, X, y=None):
-        if self.feature_names is None:
-            self.feature_names = X.columns
-        return self
+        super().__init__(feature_names)
 
     @nw.narwhalify(allow_series=True)
     def transform(self, X: FrameT, y=None, date_series: IntoSeries = None) -> FrameT:
-        date_col_name: str = date_series.name if date_series else "date"
-        X = X.with_columns(date_series)
+        X, date_col_name = _attach_group(X, date_series, "date")
 
         # compute absolute rank for each feature
         rank_columns: list[nw.Expr] = [
@@ -76,16 +105,11 @@ class RankTransformer(TransformerMixin, BaseEstimator):
 
         return X
 
-    def fit_transform(self, X: FrameT, y=None, date_series: IntoSeries = None):
-        # This is only required if transform accepts metadata because
-        # the fit_transform implementation in TransformerMixin doesn't pass metadata to transform.
-        return self.fit(X, y).transform(X, y, date_series)
-
     def get_feature_names_out(self, input_features=None):
         return [f"{feature_name}_rank" for feature_name in self.feature_names]
 
 
-class LagTransformer(TransformerMixin, BaseEstimator):
+class LagTransformer(_BaseFeatureTransformer):
     """
     LagTransformer shifts features by specified lag windows within groups defined by a ticker series.
 
@@ -99,7 +123,7 @@ class LagTransformer(TransformerMixin, BaseEstimator):
     Examples
     --------
     >>> import pandas as pd
-    >>> from centimators.data_transformers import LagTransformer
+    >>> from centimators.feature_transformers import LagTransformer
     >>> df = pd.DataFrame({
     ...     'ticker': ['A', 'A', 'A', 'B', 'B'],
     ...     'price': [10, 11, 12, 20, 21]
@@ -117,12 +141,7 @@ class LagTransformer(TransformerMixin, BaseEstimator):
 
     def __init__(self, windows, feature_names=None):
         self.windows = sorted(windows, reverse=True)
-        self.feature_names = feature_names
-
-    def fit(self, X: FrameT, y=None):
-        if self.feature_names is None:
-            self.feature_names = X.columns
-        return self
+        super().__init__(feature_names)
 
     @nw.narwhalify(allow_series=True)
     def transform(
@@ -131,8 +150,7 @@ class LagTransformer(TransformerMixin, BaseEstimator):
         y=None,
         ticker_series: IntoSeries = None,
     ):
-        X = X.with_columns(ticker_series)
-        ticker_col_name: str = ticker_series.name if ticker_series else "ticker"
+        X, ticker_col_name = _attach_group(X, ticker_series, "ticker")
 
         lag_columns = [
             nw.col(feature_name)
@@ -147,11 +165,6 @@ class LagTransformer(TransformerMixin, BaseEstimator):
 
         return X
 
-    def fit_transform(self, X: FrameT, y=None, ticker_series: IntoSeries = None):
-        # This is only required if transform accepts metadata because
-        # the fit_transform implementation in TransformerMixin doesn't pass metadata to transform.
-        return self.fit(X, y).transform(X, y, ticker_series)
-
     def get_feature_names_out(self, input_features=None):
         return [
             f"{feature_name}_lag_{lag}"
@@ -160,7 +173,7 @@ class LagTransformer(TransformerMixin, BaseEstimator):
         ]
 
 
-class MovingAverageTransformer(TransformerMixin, BaseEstimator):
+class MovingAverageTransformer(_BaseFeatureTransformer):
     """
     MovingAverageTransformer computes the moving average of a feature over a specified window.
 
@@ -174,17 +187,11 @@ class MovingAverageTransformer(TransformerMixin, BaseEstimator):
 
     def __init__(self, windows, feature_names=None):
         self.windows = windows
-        self.feature_names = feature_names
-
-    def fit(self, X: FrameT, y=None):
-        if self.feature_names is None:
-            self.feature_names = X.columns
-        return self
+        super().__init__(feature_names)
 
     @nw.narwhalify(allow_series=True)
     def transform(self, X: FrameT, y=None, ticker_series: IntoSeries = None):
-        X = X.with_columns(ticker_series)
-        ticker_col_name: str = ticker_series.name if ticker_series else "ticker"
+        X, ticker_col_name = _attach_group(X, ticker_series, "ticker")
 
         ma_columns = [
             nw.col(feature_name)
@@ -199,9 +206,6 @@ class MovingAverageTransformer(TransformerMixin, BaseEstimator):
 
         return X
 
-    def fit_transform(self, X: FrameT, y=None, ticker_series: IntoSeries = None):
-        return self.fit(X, y).transform(X, y, ticker_series)
-
     def get_feature_names_out(self, input_features=None):
         return [
             f"{feature_name}_ma{window}"
@@ -210,24 +214,18 @@ class MovingAverageTransformer(TransformerMixin, BaseEstimator):
         ]
 
 
-class LogReturnTransformer(TransformerMixin, BaseEstimator):
+class LogReturnTransformer(_BaseFeatureTransformer):
     """
     LogReturnTransformer computes the log return of a feature.
     TODO: Implement fully in Narwhals
     """
 
     def __init__(self, feature_names=None):
-        self.feature_names = feature_names
-
-    def fit(self, X: FrameT, y=None):
-        if self.feature_names is None:
-            self.feature_names = X.columns
-        return self
+        super().__init__(feature_names)
 
     @nw.narwhalify(allow_series=True)
     def transform(self, X: FrameT, y=None, ticker_series: IntoSeries = None):
-        X = X.with_columns(ticker_series)
-        ticker_col_name: str = ticker_series.name if ticker_series else "ticker"
+        X, ticker_col_name = _attach_group(X, ticker_series, "ticker")
 
         # WARNING: POLARS ONLY FOR NOW
         # LOG ON EXPR IS NOT IMPLEMENTED IN NARWHALS
@@ -243,9 +241,6 @@ class LogReturnTransformer(TransformerMixin, BaseEstimator):
         X = X.to_polars().select(log_return_columns)
 
         return X
-
-    def fit_transform(self, X: FrameT, y=None, ticker_series: IntoSeries = None):
-        return self.fit(X, y).transform(X, y, ticker_series)
 
     def get_feature_names_out(self, input_features=None):
         return [f"{feature_name}_log_return" for feature_name in self.feature_names]

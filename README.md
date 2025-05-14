@@ -20,12 +20,12 @@ pip install centimators
 
 ## Quick Start
 
-`centimators` transformers are dataframe-agnostic, powered by [Narwhals](https://narwhals-dev.github.io/narwhals/).
+`centimators` transformers are dataframe-agnostic, powered by [narwhals](https://narwhals-dev.github.io/narwhals/).
 You can use the same transformer (like `RankTransformer`) seamlessly with both Pandas and Polars DataFrames (NOTE: currently, some transformers only support Polars).
 
 First, let's define some common data:
 ```python
-from centimators.data_transformers import RankTransformer
+from centimators.feature_transformers import RankTransformer
 
 # 1. Define your data
 data = {
@@ -43,7 +43,6 @@ import pandas as pd
 df_pd = pd.DataFrame(data)
 transformer = RankTransformer(feature_names=feature_cols)
 result_pd = transformer.fit_transform(df_pd[feature_cols], date_series=df_pd['date'])
-# print(result_pd)
 ```
 
 **3. With Polars:**
@@ -53,7 +52,6 @@ import polars as pl
 df_pl = pl.DataFrame(data)
 # The same transformer instance can be used, or a new one initialized
 result_pl = transformer.fit_transform(df_pl[feature_cols], date_series=df_pl['date'])
-# print(result_pl)
 ```
 
 **Expected Output:**
@@ -78,7 +76,7 @@ Here's an example using `RankTransformer` and `LagTransformer`:
 import pandas as pd
 from sklearn.pipeline import make_pipeline
 from sklearn import set_config
-from centimators.data_transformers import RankTransformer, LagTransformer
+from centimators.feature_transformers import RankTransformer, LagTransformer
 
 # 1. Enable metadata routing globally (once per session)
 set_config(enable_metadata_routing=True)
