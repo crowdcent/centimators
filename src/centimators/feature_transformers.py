@@ -131,7 +131,7 @@ class LagTransformer(_BaseFeatureTransformer):
     >>> transformer = LagTransformer(windows=[1, 2], feature_names=['price'])
     >>> result = transformer.fit_transform(df[['price']], ticker_series=df['ticker'])
     >>> print(result)
-       price_lag_1  price_lag_2
+       price_lag1  price_lag2
     0         NaN         NaN
     1        10.0         NaN
     2        11.0        10.0
@@ -155,7 +155,7 @@ class LagTransformer(_BaseFeatureTransformer):
         lag_columns = [
             nw.col(feature_name)
             .shift(lag)
-            .alias(f"{feature_name}_lag_{lag}")
+            .alias(f"{feature_name}_lag{lag}")
             .over(ticker_col_name)
             for feature_name in self.feature_names
             for lag in self.windows
@@ -167,7 +167,7 @@ class LagTransformer(_BaseFeatureTransformer):
 
     def get_feature_names_out(self, input_features=None):
         return [
-            f"{feature_name}_lag_{lag}"
+            f"{feature_name}_lag{lag}"
             for feature_name in self.feature_names
             for lag in self.windows
         ]
@@ -234,7 +234,7 @@ class LogReturnTransformer(_BaseFeatureTransformer):
             .log()
             .diff()
             .over(ticker_col_name)
-            .alias(f"{feature_name}_log_return")
+            .alias(f"{feature_name}_logreturn")
             for feature_name in self.feature_names
         ]
 
@@ -243,4 +243,4 @@ class LogReturnTransformer(_BaseFeatureTransformer):
         return X
 
     def get_feature_names_out(self, input_features=None):
-        return [f"{feature_name}_log_return" for feature_name in self.feature_names]
+        return [f"{feature_name}_logreturn" for feature_name in self.feature_names]
