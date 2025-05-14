@@ -17,3 +17,38 @@ Or, using pip:
 ```bash
 pip install centimators
 ```
+
+## Quick Start
+
+Here's a quick example of how to use the `RankTransformer` with a pandas DataFrame:
+
+```python
+import pandas as pd
+from centimators.data_transformers import RankTransformer
+
+# Sample DataFrame
+df = pd.DataFrame({
+    'date': ['2021-01-01', '2021-01-01', '2021-01-02', '2021-01-02', '2021-01-03'],
+    'feature1': [3, 1, 2, 5, 4],
+    'feature2': [30, 20, 10, 50, 40]
+})
+
+# Initialize and fit the transformer
+transformer = RankTransformer(feature_names=['feature1', 'feature2'])
+result = transformer.fit_transform(df[['feature1', 'feature2']], date_series=df['date'])
+
+print(result)
+```
+
+This will output:
+
+```
+   feature1_rank  feature2_rank
+0            1.0             1.0
+1            0.5             0.5
+2            0.5             0.5
+3            1.0             1.0
+4            1.0             1.0
+```
+
+This transformer calculates the normalized rank of `feature1` and `feature2` for each date.
