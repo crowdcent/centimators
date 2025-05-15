@@ -147,7 +147,7 @@ def _(df_pandas, df_polars, ranker):
 def _(GroupStatsTransformer):
     feature_mapping = {
         "group_1": ["close", "open", "high", "open"],
-        "group_2": ["low", "volume"],
+        "group_2": ["low", "volume", "close"],
     }
     group_stats = GroupStatsTransformer(feature_group_mapping=feature_mapping)
     group_stats

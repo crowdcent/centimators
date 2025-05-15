@@ -1,7 +1,9 @@
+import warnings
 import narwhals as nw
 from narwhals.typing import FrameT, IntoSeries
 from sklearn.base import BaseEstimator, TransformerMixin
 import polars as pl
+from typing import Callable
 
 
 # Helper functions for horizontal statistics using narwhals expressions
@@ -523,44 +525,51 @@ class GroupStatsTransformer(_BaseFeatureTransformer):
 
     @nw.narwhalify(allow_series=True)
     def transform(self, X: FrameT, y=None) -> FrameT:
-        # Collect stats expressions for all groups
-        stat_expressions = []
+        # 1️⃣  map each stat keyword to a function that returns a narwhals Expr
+        _expr_factories: dict[str, Callable[[list[str]], nw.Expr]] = {
+            "mean": lambda cols: nw.mean_horizontal(*cols),
+            "std": lambda cols: std_horizontal(*cols, ddof=1),
+            "skew": lambda cols: skew_horizontal(*cols),
+            "kurt": lambda cols: kurtosis_horizontal(*cols),
+            "range": lambda cols: range_horizontal(*cols),
+            "cv": lambda cols: coefficient_of_variation_horizontal(*cols),
+        }
 
-        for group in self.groups:
-            # Get the feature columns for this group
-            cols = self.feature_group_mapping.get(group, [])
-            valid_cols = [col for col in cols if col in X.columns]
-            if valid_cols:
-                if "mean" in self.stats:
-                    stat_expressions.append(
-                        nw.mean_horizontal(*cols).alias(f"{group}_groupstats_mean")
-                    )
-                if "std" in self.stats:
-                    stat_expressions.append(
-                        std_horizontal(*cols, ddof=1).alias(f"{group}_groupstats_std")
-                    )
-                if "skew" in self.stats:
-                    stat_expressions.append(
-                        skew_horizontal(*cols).alias(f"{group}_groupstats_skew")
-                    )
-                if "kurt" in self.stats:
-                    stat_expressions.append(
-                        kurtosis_horizontal(*cols).alias(f"{group}_groupstats_kurt")
-                    )
-                if "range" in self.stats:
-                    stat_expressions.append(
-                        range_horizontal(*cols).alias(f"{group}_groupstats_range")
-                    )
-                if "cv" in self.stats:
-                    stat_expressions.append(
-                        coefficient_of_variation_horizontal(*cols).alias(
-                            f"{group}_groupstats_cv"
-                        )
-                    )
-            else:
+        _min_required_cols: dict[str, int] = {
+            "mean": 1,
+            "range": 1,
+            "std": 2,   # ddof=1 ⇒ need at least 2 values for a finite result
+            "cv": 2,    # depends on std
+            "skew": 3,  # bias-corrected formula needs ≥3
+            "kurt": 4,  # bias-corrected formula needs ≥4
+        }
+
+        stat_expressions: list[nw.Expr] = []
+
+        for group, cols in self.feature_group_mapping.items():
+            if not cols:
                 raise ValueError(
-                    f"No valid columns found for group '{group}' in the input DataFrame. Ensure columns for the group exist in X."
+                    f"No valid columns found for group '{group}' in the input frame."
                 )
+
+            n_cols = len(cols)
+
+            for stat in self.stats:
+                # Warn early if result is guaranteed to be NaN
+                min_required = _min_required_cols[stat]
+                if n_cols < min_required:
+                    warnings.warn(
+                        (
+                            f"{self.__class__.__name__}: statistic '{stat}' for group "
+                            f"'{group}' requires at least {min_required} feature column(s) "
+                            f"but only {n_cols} provided – the resulting column will be NaN."
+                        ),
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
+
+                expr = _expr_factories[stat](cols).alias(f"{group}_groupstats_{stat}")
+                stat_expressions.append(expr)
 
         return X.select(stat_expressions)
 
