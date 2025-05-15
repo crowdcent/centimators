@@ -9,7 +9,6 @@ authors = [
 requires-python = ">=3.10"
 dependencies = [
     "keras>=3.9.2",
-    "mkdocstrings[python]>=0.29.1",
     "narwhals>=1.39.0",
     "scikit-learn>=1.6.1",
 ]
