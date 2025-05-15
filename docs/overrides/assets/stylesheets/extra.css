@@ -125,6 +125,9 @@
     .md-search__input::placeholder {
         color: var(--dark-text-muted);
     }
+    .md-search__icon {
+        color: var(--dark-text-secondary);
+    }
     .md-search-result__meta {
       background-color: var(--dark-bg-secondary);
       border-bottom: 1px solid var(--dark-border-color);
