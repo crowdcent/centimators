@@ -1,4 +1,4 @@
-<img src="/docs/overrides/assets/images/centimators_banner_transparent_thinner.png" alt="Centimators" width="100%" style="max-width: 800px;"/>
+<img src="https://raw.githubusercontent.com/crowdcent/centimators/main/docs/overrides/assets/images/centimators_banner_transparent_thinner.png" alt="Centimators" width="100%" style="max-width: 800px;"/>
 
 # Centimators: essential data transformers and model estimators for ML and data science competitions
 
