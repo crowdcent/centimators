@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.13.8"
+__generated_with = "0.13.9"
 app = marimo.App(width="medium")
 
 
@@ -18,8 +18,11 @@ def _():
         LagTransformer,
         MovingAverageTransformer,
         LogReturnTransformer,
+        GroupStatsTransformer,
     )
+
     return (
+        GroupStatsTransformer,
         LagTransformer,
         LogReturnTransformer,
         MovingAverageTransformer,
@@ -38,8 +41,16 @@ def _():
 def _(datetime, np, pd, pl, timedelta):
     dates = [datetime.now() - timedelta(days=i) for i in range(90)]
     dates.reverse()
-    tickers = [f'Ticker{i}' for i in range(1, 21)]
-    data = {'ticker': [], 'date': [], 'open': [], 'high': [], 'low': [], 'close': [], 'volume': []}
+    tickers = [f"Ticker{i}" for i in range(1, 21)]
+    data = {
+        "ticker": [],
+        "date": [],
+        "open": [],
+        "high": [],
+        "low": [],
+        "close": [],
+        "volume": [],
+    }
     for _ticker in tickers:
         base_price = np.random.uniform(10, 1000)
         for date in dates:
@@ -49,13 +60,13 @@ def _(datetime, np, pd, pl, timedelta):
             low = close * (1 - abs(np.random.normal(0, 0.01)))
             open_price = close * (1 + np.random.normal(-0.005, 0.005))
             volume = int(np.random.lognormal(10, 1))
-            data['ticker'].append(_ticker)
-            data['date'].append(date)
-            data['open'].append(round(open_price, 2))
-            data['high'].append(round(high, 2))
-            data['low'].append(round(low, 2))
-            data['close'].append(round(close, 2))
-            data['volume'].append(volume)
+            data["ticker"].append(_ticker)
+            data["date"].append(date)
+            data["open"].append(round(open_price, 2))
+            data["high"].append(round(high, 2))
+            data["low"].append(round(low, 2))
+            data["close"].append(round(close, 2))
+            data["volume"].append(volume)
             base_price = close
     df_pandas = pd.DataFrame(data)
     df_polars = pl.DataFrame(data)
@@ -120,7 +131,7 @@ def _(df_pandas, df_polars, ranker):
 
     print(f"Pandas execution time: {pandas_time:.4f} seconds")
     print(f"Polars execution time: {polars_time:.4f} seconds")
-    print(f"Polars Speedup: {pandas_time/polars_time:.2f}x")
+    print(f"Polars Speedup: {pandas_time / polars_time:.2f}x")
 
     # Verify results are equivalent
     pd_result = result_pd
@@ -128,7 +139,25 @@ def _(df_pandas, df_polars, ranker):
     assert pd_result.equals(pl_result), "Results should be identical!"
 
     # Display sample of results
-    result_pl.head()
+    print(result_pl.head())
+    return
+
+
+@app.cell
+def _(GroupStatsTransformer):
+    feature_mapping = {
+        "group_1": ["close", "open", "high", "open"],
+        "group_2": ["low", "volume"],
+    }
+    group_stats = GroupStatsTransformer(feature_group_mapping=feature_mapping)
+    group_stats
+    return (group_stats,)
+
+
+@app.cell
+def _(df_polars, group_stats):
+    result_df = group_stats.fit_transform(df_polars)
+    print(result_df.head())
     return
 
 
@@ -157,11 +186,19 @@ def _(
     ma_windows,
     make_pipeline,
 ):
-    _lagger = LagTransformer(windows=lag_windows).set_transform_request(ticker_series=True)
+    _lagger = LagTransformer(windows=lag_windows).set_transform_request(
+        ticker_series=True
+    )
     ranker_1 = RankTransformer().set_transform_request(date_series=True)
-    _ma_transformer = MovingAverageTransformer(windows=ma_windows).set_transform_request(ticker_series=True)
-    _log_return_transformer = LogReturnTransformer().set_transform_request(ticker_series=True)
-    lagged_ranker = make_pipeline(_log_return_transformer, ranker_1, _lagger, _ma_transformer)
+    _ma_transformer = MovingAverageTransformer(
+        windows=ma_windows
+    ).set_transform_request(ticker_series=True)
+    _log_return_transformer = LogReturnTransformer().set_transform_request(
+        ticker_series=True
+    )
+    lagged_ranker = make_pipeline(
+        _log_return_transformer, ranker_1, _lagger, _ma_transformer
+    )
     lagged_ranker
     return (lagged_ranker,)
 
@@ -203,16 +240,25 @@ def _(alt, df_polars, pl, transformed_df):
 @app.cell(hide_code=True)
 def _(alt, chart_df, lag_windows, ma_windows, pl):
     def create_feature_visualization(df, columns, title, width=300, height=300):
-        melted_df = df.unpivot(index=['date'], on=columns, variable_name='variable', value_name='value')
-        chart = melted_df.plot.line(x='date', y='value', color='variable').properties(width=width, height=height, title=title)
+        melted_df = df.unpivot(
+            index=["date"], on=columns, variable_name="variable", value_name="value"
+        )
+        chart = melted_df.plot.line(x="date", y="value", color="variable").properties(
+            width=width, height=height, title=title
+        )
         chart.encoding.y.scale = alt.Scale(domain=[0, 1])
         return chart
-    _ticker = 'Ticker1'
-    filtered_df = chart_df.filter(pl.col('ticker') == _ticker)
-    ma_columns = [f'close_logreturn_rank_lag0_ma{w}' for w in ma_windows]
-    lag_columns = [f'close_logreturn_rank_lag{i}_ma5' for i in lag_windows]
-    moving_average_chart = create_feature_visualization(filtered_df, ma_columns, f'Different Moving Average Windows for {_ticker}')
-    lagged_chart = create_feature_visualization(filtered_df, lag_columns, f'Different Lag Periods for {_ticker}')
+
+    _ticker = "Ticker1"
+    filtered_df = chart_df.filter(pl.col("ticker") == _ticker)
+    ma_columns = [f"close_logreturn_rank_lag0_ma{w}" for w in ma_windows]
+    lag_columns = [f"close_logreturn_rank_lag{i}_ma5" for i in lag_windows]
+    moving_average_chart = create_feature_visualization(
+        filtered_df, ma_columns, f"Different Moving Average Windows for {_ticker}"
+    )
+    lagged_chart = create_feature_visualization(
+        filtered_df, lag_columns, f"Different Lag Periods for {_ticker}"
+    )
     (moving_average_chart | lagged_chart).interactive()
     return
 
