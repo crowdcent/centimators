@@ -1,7 +1,7 @@
 [project]
 name = "centimators"
 version = "0.1.0"
-description = "centimators: custom, shareable data transformers and model estimators for data science competitions"
+description = "essential data transformers and model estimators for ML and data science competitions"
 readme = "README.md"
 authors = [
     { name = "jrosenfeld13", email = "jason@crowdcent.com" }
@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.10"
 dependencies = [
     "keras>=3.9.2",
+    "mkdocstrings[python]>=0.29.1",
     "narwhals>=1.39.0",
     "scikit-learn>=1.6.1",
 ]
@@ -22,6 +23,11 @@ dev-dependencies = [
     "altair>=5.5.0",
     "jupyter>=1.1.1",
     "marimo>=0.13.7",
+    "markdown-exec[ansi]>=1.10.3",
+    "mkdocs-material>=9.6.14",
+    "mkdocs>=1.6.1",
+    "mkdocstrings[python]>=0.29.1",
+    "nbformat>=5.10.4",
     "numpy>=2.2.5",
     "pandas>=2.2.3",
     "polars>=1.29.0",

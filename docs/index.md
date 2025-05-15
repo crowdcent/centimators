@@ -1,4 +1,4 @@
-<img src="/docs/overview/assets/centimators_banner_transparent_thinner.png" alt="Centimators" width="100%" style="max-width: 800px;"/>
+<img src="/assets/images/centimators_banner_transparent_thinner.png" alt="Centimators" width="100%" style="max-width: 800px;"/>
 
 # Centimators: essential data transformers and model estimators for ML and data science competitions
 
@@ -6,23 +6,22 @@
 
 `centimators` makes heavy use of advanced scikit-learn concepts such as metadata routing. Familiarity with these concepts is recommended for optimal use of the library. You can learn more about metadata routing in the [scikit-learn documentation](https://scikit-learn.org/stable/metadata_routing.html).
 
-Documentation is available at [https://crowdcent.github.io/centimators/](https://crowdcent.github.io/centimators/).
-
 ## Installation
+=== "uv (Recommended)"
 
-Recommended (using uv):
-```bash
-uv add centimators
-```
+    ```bash
+    uv add centimators
+    ```
 
-Or, using pip:
-```bash
-pip install centimators
-```
+=== "pip"
+
+    ```bash
+    pip install centimators
+    ```
 
 ## Quick Start
 
-`centimators` transformers and estimators are dataframe-agnostic, powered by [narwhals](https://narwhals-dev.github.io/narwhals/).
+`centimators` transformers are dataframe-agnostic, powered by [narwhals](https://narwhals-dev.github.io/narwhals/).
 You can use the same transformer (like `RankTransformer`) seamlessly with both Pandas and Polars DataFrames (NOTE: currently, some transformers only support Polars).
 
 First, let's define some common data:

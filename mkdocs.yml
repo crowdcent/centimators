@@ -1,0 +1,109 @@
+site_name: Centimators
+site_description: Documentation for Centimators, a library for financial feature engineering.
+repo_url: https://github.com/crowdcent/centimators
+repo_name: centimators
+copyright: Made by CrowdCent
+
+nav:
+  - Overview: index.md
+  - User Guide:
+      - Playground: tutorials/playground.md
+  - API Reference:
+      - Feature Transformers: api-reference/feature_transformers.md
+
+theme:
+  name: material
+  custom_dir: docs/overrides
+  logo: assets/images/alt_white_cropped.png
+  favicon: assets/images/cc_logo.png
+  palette:
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      scheme: default 
+      primary: deep-purple
+      accent: pink
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep-purple
+      accent: pink
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep-purple
+      accent: pink
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+  font:
+    text: Poppins
+  
+  features:
+    - navigation.tracking
+    - navigation.expand
+    - navigation.path
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.tabs
+    - navigation.sections
+    - navigation.footer
+    - navigation.top
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.tabs.link
+    - content.code.annotation
+    - content.code.copy
+  language: en
+
+extra_css:
+  - overrides/assets/stylesheets/extra.css
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+      - name: python
+        class: python
+        validator: !!python/name:markdown_exec.validator
+        format: !!python/name:markdown_exec.formatter
+  - pymdownx.tabbed:
+      alternate_style: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - attr_list
+  - md_in_html
+  - admonition
+  
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_root_heading: true
+            show_source: true
+            members_order: source
+            heading_level: 2
+  - markdown-exec
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/crowdcent/centimators
+      name: centimators on github
+  generator: false 
