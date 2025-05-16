@@ -525,7 +525,6 @@ class GroupStatsTransformer(_BaseFeatureTransformer):
 
     @nw.narwhalify(allow_series=True)
     def transform(self, X: FrameT, y=None) -> FrameT:
-        # 1️⃣  map each stat keyword to a function that returns a narwhals Expr
         _expr_factories: dict[str, Callable[[list[str]], nw.Expr]] = {
             "mean": lambda cols: nw.mean_horizontal(*cols),
             "std": lambda cols: std_horizontal(*cols, ddof=1),
