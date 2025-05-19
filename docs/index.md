@@ -4,7 +4,7 @@
 
 `centimators` is an open-source python library built on scikit-learn, keras, and narwhals: designed for building and sharing **dataframe-agnostic** (pandas/polars), **multi-framework** (jax/tf/pytorch), **sklearn-style** (fit/transform/predict) transformers, meta-estimators, and machine learning models for data science competitions like Numerai, Kaggle, and the CrowdCent Challenge. 
 
-`centimators` makes heavy use of advanced scikit-learn concepts such as metadata routing. Familiarity with these concepts is recommended for optimal use of the library. You can learn more about metadata routing in the [scikit-learn documentation](https://scikit-learn.org/stable/metadata_routing.html).
+`centimators` transformers and estimators are dataframe-agnostic, powered by [narwhals](https://narwhals-dev.github.io/narwhals/). You can use the same transformer seamlessly with both Pandas and Polars DataFrames. Here's an example with RankTransformer, which calculates the normalized rank of features for all tickers over time *by date*.
 
 ## Installation
 === "uv (Recommended)"

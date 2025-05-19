@@ -22,8 +22,7 @@ pip install centimators
 
 ## Quick Start
 
-`centimators` transformers and estimators are dataframe-agnostic, powered by [narwhals](https://narwhals-dev.github.io/narwhals/).
-You can use the same transformer seamlessly with both Pandas and Polars DataFrames. Here's an example with RankTransformer, which calculates the normalized rank of features for all tickers within a single date period.
+`centimators` transformers and estimators are dataframe-agnostic, powered by [narwhals](https://narwhals-dev.github.io/narwhals/). You can use the same transformer seamlessly with both Pandas and Polars DataFrames. Here's an example with RankTransformer, which calculates the normalized rank of features for all tickers over time *by date*.
 
 First, let's define some common data:
 ```python
