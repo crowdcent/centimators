@@ -3,21 +3,15 @@ import narwhals as nw
 
 # Helper functions for horizontal statistics using narwhals expressions
 def var_horizontal(*exprs: nw.Expr, ddof: int = 1) -> nw.Expr:
-    """
-    Computes the variance horizontally (row-wise) across a set of expressions.
+    """Computes the variance horizontally (row-wise) across a set of expressions.
 
-    Parameters
-    ----------
-    *exprs : nw.Expr
-        Narwhals expressions representing the columns to compute variance over.
-    ddof : int, default 1
-        Delta Degrees of Freedom. The divisor used in calculations is N - ddof,
-        where N represents the number of elements.
+    Args:
+        *exprs (nw.Expr): Narwhals expressions representing the columns to compute variance over.
+        ddof (int, default=1): Delta Degrees of Freedom. The divisor used in calculations is N - ddof,
+            where N represents the number of elements.
 
-    Returns
-    -------
-    nw.Expr
-        A Narwhals expression for the horizontal variance.
+    Returns:
+        nw.Expr: A Narwhals expression for the horizontal variance.
     """
     actual_exprs = list(exprs)
     n = len(actual_exprs)
@@ -39,20 +33,14 @@ def var_horizontal(*exprs: nw.Expr, ddof: int = 1) -> nw.Expr:
 
 
 def std_horizontal(*exprs: nw.Expr, ddof: int = 1) -> nw.Expr:
-    """
-    Computes the standard deviation horizontally (row-wise) across a set of expressions.
+    """Computes the standard deviation horizontally (row-wise) across a set of expressions.
 
-    Parameters
-    ----------
-    *exprs : nw.Expr
-        Narwhals expressions representing the columns to compute standard deviation over.
-    ddof : int, default 1
-        Delta Degrees of Freedom. The divisor used in calculations is N - ddof.
+    Args:
+        *exprs (nw.Expr): Narwhals expressions representing the columns to compute standard deviation over.
+        ddof (int, default=1): Delta Degrees of Freedom. The divisor used in calculations is N - ddof.
 
-    Returns
-    -------
-    nw.Expr
-        A Narwhals expression for the horizontal standard deviation.
+    Returns:
+        nw.Expr: A Narwhals expression for the horizontal standard deviation.
     """
     actual_exprs = list(exprs)
     if not actual_exprs:
@@ -64,19 +52,15 @@ def std_horizontal(*exprs: nw.Expr, ddof: int = 1) -> nw.Expr:
 
 
 def skew_horizontal(*exprs: nw.Expr) -> nw.Expr:
-    """
-    Computes the skewness horizontally (row-wise) across a set of expressions.
+    """Computes the skewness horizontally (row-wise) across a set of expressions.
+
     Uses a bias-corrected formula.
 
-    Parameters
-    ----------
-    *exprs : nw.Expr
-        Narwhals expressions representing the columns to compute skewness over.
+    Args:
+        *exprs (nw.Expr): Narwhals expressions representing the columns to compute skewness over.
 
-    Returns
-    -------
-    nw.Expr
-        A Narwhals expression for the horizontal skewness.
+    Returns:
+        nw.Expr: A Narwhals expression for the horizontal skewness.
     """
     actual_exprs = list(exprs)
     n = len(actual_exprs)
@@ -106,8 +90,7 @@ def skew_horizontal(*exprs: nw.Expr) -> nw.Expr:
 
 
 def kurtosis_horizontal(*exprs: nw.Expr) -> nw.Expr:
-    """
-    Computes the excess kurtosis (Fisher's g2) horizontally (row-wise)
+    """Computes the excess kurtosis (Fisher's g2) horizontally (row-wise)
     across a set of expressions. Uses a bias-corrected formula.
 
     Excess kurtosis indicates how much the tails of the distribution differ
@@ -119,15 +102,11 @@ def kurtosis_horizontal(*exprs: nw.Expr) -> nw.Expr:
          - { [3(n-1)^2] / [(n-2)(n-3)] }
     This is undefined for n < 4.
 
-    Parameters
-    ----------
-    *exprs : nw.Expr
-        Narwhals expressions representing the columns to compute kurtosis over.
+    Args:
+        *exprs (nw.Expr): Narwhals expressions representing the columns to compute kurtosis over.
 
-    Returns
-    -------
-    nw.Expr
-        A Narwhals expression for the horizontal excess kurtosis.
+    Returns:
+        nw.Expr: A Narwhals expression for the horizontal excess kurtosis.
     """
     actual_exprs = list(exprs)
     n = len(actual_exprs)
@@ -158,18 +137,13 @@ def kurtosis_horizontal(*exprs: nw.Expr) -> nw.Expr:
 
 
 def range_horizontal(*exprs: nw.Expr) -> nw.Expr:
-    """
-    Computes the range (max - min) horizontally (row-wise) across a set of expressions.
+    """Computes the range (max - min) horizontally (row-wise) across a set of expressions.
 
-    Parameters
-    ----------
-    *exprs : nw.Expr
-        Narwhals expressions representing the columns to compute range over.
+    Args:
+        *exprs (nw.Expr): Narwhals expressions representing the columns to compute range over.
 
-    Returns
-    -------
-    nw.Expr
-        A Narwhals expression for the horizontal range.
+    Returns:
+        nw.Expr: A Narwhals expression for the horizontal range.
     """
     actual_exprs = list(exprs)
 
@@ -183,25 +157,19 @@ def range_horizontal(*exprs: nw.Expr) -> nw.Expr:
 
 
 def coefficient_of_variation_horizontal(*exprs: nw.Expr, ddof: int = 1) -> nw.Expr:
-    """
-    Computes the coefficient of variation (CV) horizontally (row-wise)
+    """Computes the coefficient of variation (CV) horizontally (row-wise)
     across a set of expressions.
 
     CV = standard_deviation / mean
 
-    Parameters
-    ----------
-    *exprs : nw.Expr
-        Narwhals expressions representing the columns to compute CV over.
-    ddof : int, default 1
-        Delta Degrees of Freedom for the standard deviation calculation.
+    Args:
+        *exprs (nw.Expr): Narwhals expressions representing the columns to compute CV over.
+        ddof (int, default=1): Delta Degrees of Freedom for the standard deviation calculation.
 
-    Returns
-    -------
-    nw.Expr
-        A Narwhals expression for the horizontal coefficient of variation.
-        Returns NaN if mean is zero and std is zero.
-        Returns Inf or -Inf if mean is zero and std is non-zero.
+    Returns:
+        nw.Expr: A Narwhals expression for the horizontal coefficient of variation.
+            Returns NaN if mean is zero and std is zero.
+            Returns Inf or -Inf if mean is zero and std is non-zero.
     """
     actual_exprs = list(exprs)
 

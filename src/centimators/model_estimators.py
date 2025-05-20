@@ -6,15 +6,14 @@ This module exposes two estimator classes that conform to scikit-learn's
 lifting to **Keras**.  The goal is to let neural networks participate in
 classic ML pipelines without boilerplate.
 
-Highlights
-----------
-* **Drop-in compatibility** – works with `sklearn.pipeline.Pipeline`,
-  `GridSearchCV`, etc.
-* **Distribution strategies** – opt-in data-parallel training across
-  multiple devices/GPUs.
-* **Sequence support** – :class:`SequenceEstimator` reshapes a flattened
-  lag matrix into the 3-D tensor expected by recurrent or convolutional
-  sequence layers.
+Highlights:
+    * **Drop-in compatibility** – works with `sklearn.pipeline.Pipeline`,
+      `GridSearchCV`, etc.
+    * **Distribution strategies** – opt-in data-parallel training across
+      multiple devices/GPUs.
+    * **Sequence support** – :class:`SequenceEstimator` reshapes a flattened
+      lag matrix into the 3-D tensor expected by recurrent or convolutional
+      sequence layers.
 """
 
 from abc import ABC, abstractmethod
@@ -30,35 +29,31 @@ from narwhals.typing import IntoFrame
 
 
 @dataclass(kw_only=True)
-class KerasEstimator(TransformerMixin, BaseEstimator, ABC):
+class BaseKerasEstimator(TransformerMixin, BaseEstimator, ABC):
     """Meta-estimator for Keras models following the scikit-learn API.
 
-    Parameters
-    ----------
-    output_units : int, default=1
-        Dimensionality of the model output.  It is forwarded to
-        :meth:`build_model` and can be used there when constructing the
-        final layer.
-    optimizer : keras.optimizers.Optimizer, default=keras.optimizers.Adam
-        Optimiser class **not instance**.  The class is instantiated in
-        :pymeth:`fit` with the requested ``learning_rate``.
-    learning_rate : float, default=1e-3
-        Learning-rate passed to the optimiser constructor.
-    loss_function : str or keras.losses.Loss, default="mse"
-        Loss forwarded to ``model.compile``.
-    metrics : list[str] | None, default=None
-        List of metrics forwarded to ``model.compile``.
-    model : keras.Model | None, default=None
-        Internal Keras model instance.  If *None* it is lazily built on
-        the first call to :meth:`fit`.
-    distribution_strategy : str | None, default=None
-        Name of a Keras distribution strategy to activate before
-        training.  At the moment only ``"DataParallel"`` is recognised.
+    Args:
+        output_units (int, default=1): Dimensionality of the model output.
+            It is forwarded to :meth:`build_model` and can be used there when
+            constructing the final layer.
+        optimizer (Type[optimizers.Optimizer], default=keras.optimizers.Adam):
+            Optimiser class **not instance**. The class is instantiated in
+            :meth:`fit` with the requested ``learning_rate``.
+        learning_rate (float, default=1e-3): Learning-rate passed to the
+            optimiser constructor.
+        loss_function (str or keras.losses.Loss, default="mse"): Loss
+            forwarded to ``model.compile``.
+        metrics (list[str] | None, default=None): List of metrics forwarded
+            to ``model.compile``.
+        model (keras.Model | None, default=None): Internal Keras model instance.
+            If *None* it is lazily built on the first call to :meth:`fit`.
+        distribution_strategy (str | None, default=None): Name of a Keras
+            distribution strategy to activate before training. At the moment
+            only ``"DataParallel"`` is recognised.
 
-    Notes
-    -----
-    Sub-classes **must** implement :meth:`build_model` which should return
-    a compiled (or at least constructed) ``keras.Model`` instance.
+    Notes:
+        Sub-classes **must** implement :meth:`build_model` which should return
+        a compiled (or at least constructed) ``keras.Model`` instance.
     """
 
     output_units: int = 1
@@ -93,32 +88,25 @@ class KerasEstimator(TransformerMixin, BaseEstimator, ABC):
         batch_size: int = 32,
         validation_data: tuple[Any, Any] | None = None,
         callbacks: list[Any] | None = None,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> "BaseKerasEstimator":
         """Fit the underlying Keras model.
 
-        The model is **lazily** built and compiled on the first call.  All
+        The model is **lazily** built and compiled on the first call. All
         extra keyword arguments are forwarded to ``keras.Model.fit``.
 
-        Parameters
-        ----------
-        X : array-like of shape (n_samples, n_features)
-            Training data.
-        y : array-like of shape (n_samples,) or (n_samples, n_outputs)
-            Training targets.
-        epochs : int, default=100
-            Number of training epochs.
-        batch_size : int, default=32
-            Minibatch size.
-        validation_data : tuple(X_val, y_val) | None, default=None
-            Optional validation split forwarded to Keras.
-        callbacks : list[keras.callbacks.Callback] | None, default=None
-            Optional list of callbacks.
+        Args:
+            X (array-like): Training data of shape (n_samples, n_features).
+            y (array-like): Training targets of shape (n_samples,) or (n_samples, n_outputs).
+            epochs (int, default=100): Number of training epochs.
+            batch_size (int, default=32): Minibatch size.
+            validation_data (tuple[Any, Any] | None, default=None): Optional
+                validation split forwarded to Keras.
+            callbacks (list[Any] | None, default=None): Optional list of callbacks.
+            **kwargs: Additional keyword arguments forwarded to ``keras.Model.fit``.
 
-        Returns
-        -------
-        self : KerasEstimator
-            Fitted estimator.
+        Returns:
+            BaseKerasEstimator: Fitted estimator.
         """
         if self.distribution_strategy:
             self._setup_distribution_strategy()
@@ -142,20 +130,17 @@ class KerasEstimator(TransformerMixin, BaseEstimator, ABC):
         )
         return self
 
-    def predict(self, X, batch_size: int = 512, **kwargs):
+    def predict(self, X, batch_size: int = 512, **kwargs: Any) -> Any:
         """Generate predictions with the trained model.
 
-        Parameters
-        ----------
-        X : array-like of shape (n_samples, n_features)
-            Input samples.
-        batch_size : int, default=512
-            Batch size used for inference.
+        Args:
+            X (array-like): Input samples of shape (n_samples, n_features).
+            batch_size (int, default=512): Batch size used for inference.
+            **kwargs: Additional keyword arguments forwarded to ``keras.Model.predict``.
 
-        Returns
-        -------
-        array-like of shape (n_samples, output_units)
-            Model predictions in the same order as *X*.
+        Returns:
+            Any: Model predictions of shape (n_samples, output_units)
+                in the same order as *X*.
         """
         if not self.model:
             raise ValueError("Model not built. Call `build_model` first.")
@@ -168,41 +153,22 @@ class KerasEstimator(TransformerMixin, BaseEstimator, ABC):
 
 
 @dataclass(kw_only=True)
-class SequenceEstimator(KerasEstimator):
+class SequenceEstimator(BaseKerasEstimator):
     """Estimator for models that consume sequential data.
 
     The class assumes that *X* is a **flattened** 2-D representation of a
     sequence built from multiple lagged views of the original signal.
     The shape transformation performed by :meth:`_reshape` is visualised
     below for a concrete example.
-
-    Example
-    -------
-    Consider a univariate time-series where we feed the last three lags
-    (``t-3``, ``t-2``, ``t-1``) into the network::
-
-        lag_windows = [3, 2, 1]            # oldest → most recent
-        n_features_per_timestep = 1        # univariate
-        n_samples = 5
-
-        # Raw design matrix produced by e.g. `sklearn.preprocessing.FunctionTransformer`
-        X.shape == (n_samples, len(lag_windows) * n_features_per_timestep)
-                  == (5, 3)
-
-    The private :meth:`_reshape` utility will turn this into the
-    3-dimension tensor expected by sequence layers such as `LSTM`::
-
-        X_reshaped.shape == (n_samples, seq_length, n_features_per_timestep)
-                          == (5, 3, 1)
-
-    Parameters
-    ----------
-    lag_windows : list[int]
-        Offsets (in number of timesteps) that have been concatenated to
-        form the flattened design matrix.
-    n_features_per_timestep : int
-        Number of *original* features per timestep **before** creating
-        the lags.
+    
+    Args:
+        lag_windows (list[int]): Offsets (in number of timesteps) that have been
+            concatenated to form the flattened design matrix.
+        n_features_per_timestep (int): Number of *original* features per timestep
+            **before** creating the lags.
+        
+    Attributes:
+        seq_length (int): Inferred sequence length from lag_windows.
     """
 
     lag_windows: list[int]
@@ -214,20 +180,16 @@ class SequenceEstimator(KerasEstimator):
     def _reshape(self, X: IntoFrame, validation_data: tuple[Any, Any] | None = None):
         """Reshape a flattened lag matrix into a 3-D tensor.
 
-        Parameters
-        ----------
-        X : IntoFrame
-            Design matrix containing the lagged features.
-        validation_data : tuple(X_val, y_val) | None, default=None
-            Optional validation split; its *X* part will be reshaped in
-            the same way.
+        Args:
+            X (IntoFrame): Design matrix containing the lagged features.
+            validation_data (tuple[Any, Any] | None, default=None): Optional
+                validation split; its *X* part will be reshaped in the same way.
 
-        Returns
-        -------
-        X_reshaped : numpy.ndarray
-            Reshaped training data with shape ``(n_samples, seq_length, n_features_per_timestep)``.
-        validation_data : tuple(X_val_reshaped, y_val)
-            Validation data with the input part reshaped.
+        Returns:
+            tuple[numpy.ndarray, tuple[Any, Any] | None]:
+                A tuple containing the reshaped training data (numpy.ndarray with shape
+                ``(n_samples, seq_length, n_features_per_timestep)``) and the
+                (potentially reshaped) validation data.
         """
         X = nw.from_native(X).to_numpy()
         X_reshaped = ops.reshape(
@@ -245,8 +207,20 @@ class SequenceEstimator(KerasEstimator):
 
         return X_reshaped, validation_data
 
-    def fit(self, X, y, validation_data: tuple[Any, Any] | None = None, **kwargs):
-        """Redefine :meth:`KerasEstimator.fit` to include reshaping."""
+    def fit(self, X, y, validation_data: tuple[Any, Any] | None = None, **kwargs: Any) -> "SequenceEstimator":
+        """Redefines :meth:`BaseKerasEstimator.fit`
+        to include reshaping for sequence data.
+
+        Args:
+            X (array-like): Training data.
+            y (array-like): Training targets.
+            validation_data (tuple[Any, Any] | None, default=None): Optional
+                validation split.
+            **kwargs: Additional keyword arguments passed to the parent fit method.
+
+        Returns:
+            SequenceEstimator: Fitted estimator.
+        """
         X_reshaped, validation_data_reshaped = self._reshape(X, validation_data)
         return super().fit(
             X_reshaped,
@@ -255,6 +229,16 @@ class SequenceEstimator(KerasEstimator):
             **kwargs,
         )
 
-    def predict(self, X, **kwargs):
+    def predict(self, X, **kwargs: Any) -> numpy.ndarray:
+        """Redefines :meth:`BaseKerasEstimator.predict`
+        to include reshaping for sequence data.
+
+        Args:
+            X (array-like): Input data.
+            **kwargs: Additional keyword arguments passed to the parent predict method.
+
+        Returns:
+            numpy.ndarray: Predictions of shape (n_samples, output_units).
+        """
         X_reshaped, _ = self._reshape(X)
         return super().predict(X_reshaped, **kwargs)
