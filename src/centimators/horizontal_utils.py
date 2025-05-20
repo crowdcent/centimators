@@ -1,5 +1,6 @@
 import narwhals as nw
 
+
 # Helper functions for horizontal statistics using narwhals expressions
 def var_horizontal(*exprs: nw.Expr, ddof: int = 1) -> nw.Expr:
     """
@@ -223,4 +224,4 @@ def coefficient_of_variation_horizontal(*exprs: nw.Expr, ddof: int = 1) -> nw.Ex
 # skew_expr = skew_horizontal(nw.Float64(1), nw.Float64(2), nw.Float64(3))
 # kurtosis_expr = kurtosis_horizontal(nw.Float64(1), nw.Float64(2), nw.Float64(3))
 # range_expr = range_horizontal(nw.Float64(1), nw.Float64(2), nw.Float64(3))
-# cv_expr = coefficient_of_variation_horizontal(nw.Float64(1), nw.Float64(2), nw.Float64(3)) 
+# cv_expr = coefficient_of_variation_horizontal(nw.Float64(1), nw.Float64(2), nw.Float64(3))
