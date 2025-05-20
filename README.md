@@ -92,7 +92,7 @@ ma_transformer = MovingAverageTransformer(
 ).set_transform_request(ticker_series=True)
 
 # Create the pipeline
-pipeline = make_pipeline(
+feature_pipeline = make_pipeline(
     log_return_transformer, ranker, lagger, ma_transformer
 )
 ```
@@ -114,7 +114,7 @@ This allows for complex data transformations where different steps require diffe
 ```python
 # Now you can use this pipeline with your data
 feature_names = ['open', 'high', 'low', 'close']
-transformed_df = pipeline.fit_transform(
+transformed_df = feature_pipeline.fit_transform(
     df_polars[feature_names],
     date_series=df_polars["date"],
     ticker_series=df_polars["ticker"],
@@ -123,3 +123,39 @@ transformed_df = pipeline.fit_transform(
 
 We can take a closer look at a sample output for a single ticker and for a single initial feature. This clearly shows how the close price for a cross-sectional dataset is transformed into a log return, ranked (between 0 and 1) by date, and smoothed (moving average windows) by ticker:
 ![feature_example](https://raw.githubusercontent.com/crowdcent/centimators/main/docs/overrides/assets/images/feature_example.png)
+
+## End-to-End Pipeline with an Estimator
+
+The previous "Advanced Pipeline" example constructed only the *feature engineering* part of a workflow.  Thanks to Centimators' Keras-backed estimators you can seamlessly append a model as the final step and train everything through a single `fit` call.
+
+```python
+from sklearn.impute import SimpleImputer
+from centimators.model_estimators import MLPRegressor
+
+
+lag_windows = [0, 5, 10, 15]
+ma_windows = [5, 10, 20, 40]
+
+mlp_pipeline = make_pipeline(
+    # Start with the existing feature pipeline
+    feature_pipeline,
+    # Replace NaNs created by lagging with a constant value
+    SimpleImputer(strategy="constant", fill_value=0.5).set_output(transform="pandas"),
+    # Train a neural network in-place
+    MLPRegressor().set_fit_request(epochs=True),
+)
+
+feature_names = ["open", "high", "low", "close"]
+
+mlp_pipeline.fit(
+    df_pl[feature_names],
+    df_pl["target"],
+    date_series=df_pl["date"],
+    ticker_series=df_pl["ticker"],
+    epochs=5,
+)
+```
+
+![centimators_pipeline_estimator](https://raw.githubusercontent.com/crowdcent/centimators/main/docs/overrides/assets/images/centimators_pipeline_estimator.png)
+
+Just as before, scikit-learn's *metadata routing* ensures that auxiliary inputs (`date_series`, `ticker_series`, `epochs`) are forwarded only to the steps that explicitly requested them.

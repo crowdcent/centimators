@@ -17,7 +17,7 @@ Highlights:
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Type
 
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -26,6 +26,8 @@ from keras import distribution
 from keras import ops
 import narwhals as nw
 from narwhals.typing import IntoFrame
+from keras import layers, models
+import numpy
 
 
 @dataclass(kw_only=True)
@@ -50,6 +52,10 @@ class BaseKerasEstimator(TransformerMixin, BaseEstimator, ABC):
         distribution_strategy (str | None, default=None): Name of a Keras
             distribution strategy to activate before training. At the moment
             only ``"DataParallel"`` is recognised.
+
+    Attributes:
+        _n_features_in_ (int | None): Inferred number of features from the data
+            passed to :meth:`fit`.
 
     Notes:
         Sub-classes **must** implement :meth:`build_model` which should return
@@ -108,6 +114,8 @@ class BaseKerasEstimator(TransformerMixin, BaseEstimator, ABC):
         Returns:
             BaseKerasEstimator: Fitted estimator.
         """
+        self._n_features_in_ = X.shape[1]
+
         if self.distribution_strategy:
             self._setup_distribution_strategy()
 
@@ -120,14 +128,15 @@ class BaseKerasEstimator(TransformerMixin, BaseEstimator, ABC):
             )
 
         self.model.fit(
-            X=nw.from_native(X).to_numpy(),
-            y=nw.from_native(y).to_numpy(),
+            nw.from_native(X).to_numpy(),
+            y=nw.from_native(y, allow_series=True).to_numpy(),
             batch_size=batch_size,
             epochs=epochs,
             validation_data=validation_data,
             callbacks=callbacks,
             **kwargs,
         )
+        self._is_fitted = True
         return self
 
     def predict(self, X, batch_size: int = 512, **kwargs: Any) -> Any:
@@ -151,6 +160,14 @@ class BaseKerasEstimator(TransformerMixin, BaseEstimator, ABC):
         """Alias for :meth:`predict` to comply with scikit-learn pipelines."""
         return self.predict(X, **kwargs)
 
+    def __sklearn_is_fitted__(self) -> bool:
+        """Return ``True`` when the estimator has been fitted.
+
+        scikit-learn relies on :func:`sklearn.utils.validation.check_is_fitted`
+        to decide whether an estimator is ready for inference.
+        """
+        return getattr(self, "_is_fitted", False)
+
 
 @dataclass(kw_only=True)
 class SequenceEstimator(BaseKerasEstimator):
@@ -160,13 +177,13 @@ class SequenceEstimator(BaseKerasEstimator):
     sequence built from multiple lagged views of the original signal.
     The shape transformation performed by :meth:`_reshape` is visualised
     below for a concrete example.
-    
+
     Args:
         lag_windows (list[int]): Offsets (in number of timesteps) that have been
             concatenated to form the flattened design matrix.
         n_features_per_timestep (int): Number of *original* features per timestep
             **before** creating the lags.
-        
+
     Attributes:
         seq_length (int): Inferred sequence length from lag_windows.
     """
@@ -207,7 +224,9 @@ class SequenceEstimator(BaseKerasEstimator):
 
         return X_reshaped, validation_data
 
-    def fit(self, X, y, validation_data: tuple[Any, Any] | None = None, **kwargs: Any) -> "SequenceEstimator":
+    def fit(
+        self, X, y, validation_data: tuple[Any, Any] | None = None, **kwargs: Any
+    ) -> "SequenceEstimator":
         """Redefines :meth:`BaseKerasEstimator.fit`
         to include reshaping for sequence data.
 
@@ -222,12 +241,13 @@ class SequenceEstimator(BaseKerasEstimator):
             SequenceEstimator: Fitted estimator.
         """
         X_reshaped, validation_data_reshaped = self._reshape(X, validation_data)
-        return super().fit(
+        super().fit(
             X_reshaped,
             y=nw.from_native(y).to_numpy(),
             validation_data=validation_data_reshaped,
             **kwargs,
         )
+        return self
 
     def predict(self, X, **kwargs: Any) -> numpy.ndarray:
         """Redefines :meth:`BaseKerasEstimator.predict`
@@ -242,3 +262,50 @@ class SequenceEstimator(BaseKerasEstimator):
         """
         X_reshaped, _ = self._reshape(X)
         return super().predict(X_reshaped, **kwargs)
+
+
+@dataclass(kw_only=True)
+class MLPRegressor(BaseKerasEstimator):
+    """A minimal fully-connected multi-layer perceptron for tabular data.
+
+    The class follows the scikit-learn *estimator* interface while delegating
+    the heavy lifting to Keras.  It is intended as a sensible baseline model
+    that works *out of the box* with classic ML workflows such as pipelines or
+    cross-validation.
+
+    Args:
+        hidden_units (tuple[int, ...], default=(64, 64)): Width (number of
+            neurons) for each hidden layer.  The length of the tuple defines
+            the depth of the network.
+        activation (str, default="relu"): Activation function applied after
+            each hidden ``Dense`` layer.
+        dropout_rate (float, default=0.0): Optional dropout applied **after**
+            each hidden layer.  Set to *0* to disable dropout entirely.
+        output_units (int, default=1): Copied from :class:`BaseKerasEstimator`.
+            Defines the dimensionality of the final layer.
+
+    Attributes:
+        _n_features_in_ (int | None): Inferred number of features from the data
+            passed to :meth:`fit`.
+    """
+
+    hidden_units: tuple[int, ...] = (64, 64)
+    activation: str = "relu"
+    dropout_rate: float = 0.0
+    metrics: list[str] | None = field(default_factory=lambda: ["mse"])
+
+    def build_model(self):
+        """Construct a simple MLP with the configured hyper-parameters."""
+        if self._n_features_in_ is None:
+            raise ValueError(
+                "`_n_features_in_` has not been set. Call `fit` in order to build the model."
+            )
+
+        inputs = layers.Input(shape=(self._n_features_in_,), name="features")
+        x = inputs
+        for units in self.hidden_units:
+            x = layers.Dense(units, activation=self.activation)(x)
+            if self.dropout_rate > 0:
+                x = layers.Dropout(self.dropout_rate)(x)
+        outputs = layers.Dense(self.output_units, activation="linear")(x)
+        self.model = models.Model(inputs=inputs, outputs=outputs, name="mlp_regressor")

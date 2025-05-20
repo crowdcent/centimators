@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.13.9"
+__generated_with = "0.13.10"
 app = marimo.App(width="medium")
 
 
@@ -212,7 +212,7 @@ def _(df_polars, lagged_ranker):
         ticker_series=df_polars["ticker"],
     )
     transformed_df.tail()
-    return (transformed_df,)
+    return feature_names, transformed_df
 
 
 @app.cell(hide_code=True)
@@ -260,6 +260,55 @@ def _(alt, chart_df, lag_windows, ma_windows, pl):
         filtered_df, lag_columns, f"Different Lag Periods for {_ticker}"
     )
     (moving_average_chart | lagged_chart).interactive()
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""## Custom centimators keras estimators""")
+    return
+
+
+@app.cell
+def _():
+    import os
+
+    os.environ["KERAS_BACKEND"] = "jax"
+
+    from centimators.model_estimators import MLPRegressor
+
+    return (MLPRegressor,)
+
+
+@app.cell
+def _(MLPRegressor, lagged_ranker, make_pipeline):
+    from sklearn.impute import SimpleImputer
+    imputer = SimpleImputer(strategy="constant", fill_value=0.5).set_output(transform="pandas")
+    mlp_regressor = MLPRegressor().set_fit_request(epochs=True)
+
+    mlp_pipeline = make_pipeline(lagged_ranker, imputer, mlp_regressor)
+    return (mlp_pipeline,)
+
+
+@app.cell
+def _(df_polars, feature_names, mlp_pipeline):
+    mlp_pipeline.fit(
+        df_polars[feature_names],
+        df_polars["close"],
+        date_series=df_polars["date"],
+        ticker_series=df_polars["ticker"],
+        epochs=5
+    )
+    return
+
+
+@app.cell
+def _(df_polars, feature_names, mlp_pipeline):
+    mlp_pipeline.transform(
+        df_polars[feature_names],
+        date_series=df_polars["date"],
+        ticker_series=df_polars["ticker"],
+    )
     return
 
 

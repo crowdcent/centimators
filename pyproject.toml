@@ -20,6 +20,7 @@ build-backend = "hatchling.build"
 [tool.uv]
 dev-dependencies = [
     "altair>=5.5.0",
+    "jax>=0.6.0",
     "jupyter>=1.1.1",
     "marimo>=0.13.7",
     "markdown-exec[ansi]>=1.10.3",

@@ -69,6 +69,8 @@ class _BaseFeatureTransformer(TransformerMixin, BaseEstimator):
     def fit(self, X: FrameT, y=None):
         if self.feature_names is None:
             self.feature_names = X.columns
+
+        self._is_fitted = True
         return self
 
     # Accept **kwargs so subclasses can expose arbitrary metadata
@@ -76,6 +78,10 @@ class _BaseFeatureTransformer(TransformerMixin, BaseEstimator):
     # boiler-plate.
     def fit_transform(self, X: FrameT, y=None, **kwargs):
         return self.fit(X, y).transform(X, y, **kwargs)
+
+    def __sklearn_is_fitted__(self) -> bool:
+        """Return ``True`` when the transformer has been fitted."""
+        return getattr(self, "_is_fitted", False)
 
 
 class RankTransformer(_BaseFeatureTransformer):
@@ -223,8 +229,8 @@ class LagTransformer(_BaseFeatureTransformer):
             .shift(lag)
             .alias(f"{feature_name}_lag{lag}")
             .over(ticker_col_name)
-            for lag in self.windows # Iterate over lags first
-            for feature_name in self.feature_names # Then over feature names
+            for lag in self.windows  # Iterate over lags first
+            for feature_name in self.feature_names  # Then over feature names
         ]
 
         X = X.select(lag_columns)
@@ -242,8 +248,8 @@ class LagTransformer(_BaseFeatureTransformer):
         """
         return [
             f"{feature_name}_lag{lag}"
-            for lag in self.windows # Iterate over lags first
-            for feature_name in self.feature_names # Then over feature names
+            for lag in self.windows  # Iterate over lags first
+            for feature_name in self.feature_names  # Then over feature names
         ]
 
 
