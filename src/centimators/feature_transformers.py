@@ -43,10 +43,17 @@ from .horizontal_utils import (
 
 
 def _attach_group(X: FrameT, series: IntoSeries, default_name: str):
-    """Attach *series* to *X* if supplied and return *(X, col_name)*."""
+    """Attach *series* to *X* if supplied and return ``(X, col_name)``.
+
+    When ``series`` is ``None`` a constant column named ``default_name`` is
+    appended to ``X``.  This ensures downstream ``.over`` operations have a
+    valid grouping column instead of referencing a non-existent one.
+    """
     if series is not None:
         X = X.with_columns(series)
         return X, series.name
+
+    X = X.with_columns(nw.lit(0).alias(default_name))
     return X, default_name
 
 
