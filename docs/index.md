@@ -22,7 +22,7 @@
 ## Quick Start
 
 `centimators` transformers are dataframe-agnostic, powered by [narwhals](https://narwhals-dev.github.io/narwhals/).
-You can use the same transformer (like `RankTransformer`) seamlessly with both Pandas and Polars DataFrames (NOTE: currently, some transformers only support Polars). This transformer calculates the normalized rank of features within each date group.
+You can use the same transformer (like `RankTransformer`) seamlessly with both Pandas and Polars DataFrames. This transformer calculates the normalized rank of features within each date group.
 
 First, let's define some common data:
 ```python
