@@ -14,7 +14,7 @@ nav:
 theme:
   name: material
   custom_dir: docs/overrides
-  logo: assets/images/alt_white_cropped.png
+  logo: assets/images/logo-nav.svg
   favicon: assets/images/cc_logo.png
   palette:
     # Palette toggle for automatic mode
