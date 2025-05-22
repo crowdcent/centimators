@@ -5,12 +5,13 @@ repo_name: centimators
 copyright: Made by CrowdCent
 
 nav:
-  - Overview: index.md
-  - User Guide: user-guide.md
+  - Overview:
+      - Overview: index.md
+      - User Guide: user-guide.md
   - API Reference:
       - Feature Transformers: api-reference/feature_transformers.md
       - Model Estimators: api-reference/model_estimators.md
-
+      - Keras Cortex: api-reference/keras_cortex.md
 theme:
   name: material
   custom_dir: docs/overrides
@@ -103,7 +104,13 @@ plugins:
 
 extra:
   social:
+    - icon: fontawesome/brands/discord
+      link: https://discord.gg/v6ZSGuTbQS
+      name: crowdcent on discord
+    - icon: fontawesome/brands/x-twitter
+      link: https://x.com/CrowdCent
+      name: crowdcent on X
     - icon: fontawesome/brands/github
-      link: https://github.com/crowdcent/centimators
-      name: centimators on github
-  generator: false 
+      link: https://github.com/CrowdCent
+      name: crowdcent on github
+  generator: false

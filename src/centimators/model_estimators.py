@@ -20,7 +20,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Type
 
-from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.base import BaseEstimator, TransformerMixin, RegressorMixin
 from keras import optimizers
 from keras import distribution
 from keras import ops
@@ -265,7 +265,7 @@ class SequenceEstimator(BaseKerasEstimator):
 
 
 @dataclass(kw_only=True)
-class MLPRegressor(BaseKerasEstimator):
+class MLPRegressor(RegressorMixin, BaseKerasEstimator):
     """A minimal fully-connected multi-layer perceptron for tabular data.
 
     The class follows the scikit-learn *estimator* interface while delegating
@@ -296,11 +296,6 @@ class MLPRegressor(BaseKerasEstimator):
 
     def build_model(self):
         """Construct a simple MLP with the configured hyper-parameters."""
-        if self._n_features_in_ is None:
-            raise ValueError(
-                "`_n_features_in_` has not been set. Call `fit` in order to build the model."
-            )
-
         inputs = layers.Input(shape=(self._n_features_in_,), name="features")
         x = inputs
         for units in self.hidden_units:
