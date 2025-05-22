@@ -131,7 +131,7 @@ class KerasCortex(RegressorMixin, BaseEstimator):
 
     def think_loop(
         self, base_estimator, X, y, validation_data, n_iterations=5, **kwargs
-    ):
+    ) -> tuple[BaseEstimator, list[tuple[str, float]]]:
         """Iteratively refine and retrain a Keras-based estimator.
 
         This method forms the core of `KerasCortex`. It takes an initial Keras
@@ -155,11 +155,10 @@ class KerasCortex(RegressorMixin, BaseEstimator):
                 Keras estimator during each iteration (e.g., `epochs`, `batch_size`).
 
         Returns:
-            tuple[BaseEstimator, list[tuple[str, float]]]:
-                - best_model: The Keras estimator instance with the best-performing
-                  `build_model` method found.
-                - performance_log: A list of (code_string, validation_metric)
-                  tuples, recording each attempted `build_model` code and its score.
+            - best_model: The Keras estimator instance with the best-performing
+                `build_model` method found.
+            - performance_log: A list of (code_string, validation_metric)
+                tuples, recording each attempted `build_model` code and its score.
         """
         # Initial baseline: clone the provided estimator
         base_model = clone(base_estimator)
