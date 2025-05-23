@@ -25,12 +25,12 @@ import inspect
 import dspy
 from dspy import InputField, OutputField, Signature, Module, ChainOfThought
 from centimators.model_estimators import MLPRegressor
-from keras import (
+from keras import (  # noqa: F401
     layers,
     models,
     regularizers,
     optimizers,
-)  # make available to LLM-generated code
+)  # unused, but needed to be made available in global namespace for LLM-generated code
 from sklearn.base import BaseEstimator, RegressorMixin, clone
 import types
 
