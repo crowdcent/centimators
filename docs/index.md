@@ -10,18 +10,35 @@
 |------------------------------------|------------------------------|---------------------------|-----------------------------------|
 | Iterate fast on Numerai, Kaggle, & CrowdCent submissions without reinventing feature engineering each time. | Production-ready transformers for ranking, lagging, returns, and rolling stats that respect time & group boundaries. | Swap Pandas ↔ Polars with a one-liner, leverage JAX/TF/PyTorch back-ends, and squeeze every millisecond out of your pipeline. | Build and improve upon architectures like bottleneck autoencoders and self-improving neural networks with the same scikit-learn-style API. |
 
-## Quick Overview
+## Basic Usage
+
+For common transformations like ranking (which groups by date) and lagging (which groups by ticker), use out-of-the-box transformers to create features out of your data, while easily handling group boundaries:
 
 ```python
-import pandas as pd
-from centimators.feature_transformers import RankTransformer
+from centimators.feature_transformers import RankTransformer, LagTransformer
 
-# Works with both Pandas and Polars
-transformer = RankTransformer(feature_names=['close', 'volume'])
-ranked_features = transformer.fit_transform(
+# Cross-sectional ranking: rank features within each date
+rank_transformer = RankTransformer(feature_names=['close', 'volume'])
+ranked_features = rank_transformer.fit_transform(
     df[['close', 'volume']], 
     date_series=df['date']
 )
+
+# Time-series lagging: create lagged features within each ticker
+lag_transformer = LagTransformer(windows=[1, 5, 10])
+lagged_features = lag_transformer.fit_transform(
+    df[['close', 'volume']], 
+    ticker_series=df['ticker']
+)
+```
+
+For modeling your features, use centimators's model estimators. A family of Keras-backed estimators are available, including MLPRegressor, BottleneckEncoder, and always more to come.
+
+```python
+from centimators.model_estimators import MLPRegressor
+
+model = MLPRegressor()
+model.fit(df[feature_names], df['target'])
 ```
 
 ## Getting Started
