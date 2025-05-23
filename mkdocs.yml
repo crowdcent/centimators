@@ -102,6 +102,9 @@ plugins:
             heading_level: 2
   - markdown-exec
 
+extra_javascript:
+    - "overrides/assets/js/runllm-widget.js"
+
 extra:
   social:
     - icon: fontawesome/brands/discord

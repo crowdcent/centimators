@@ -15,26 +15,34 @@ Highlights:
       Keras code modifications.
     * **KerasCodeRefinements**: A DSPy signature defining the LLM's task for
       suggesting code changes.
+
+!!! Warning
+
+    This module is a work in progress. It is not yet ready for production use.
 """
 
 import inspect
 import dspy
 from dspy import InputField, OutputField, Signature, Module, ChainOfThought
 from centimators.model_estimators import MLPRegressor
-from keras import layers, models, regularizers  # make available to LLM-generated code
+from keras import (
+    layers,
+    models,
+    regularizers,
+    optimizers,
+)  # make available to LLM-generated code
 from sklearn.base import BaseEstimator, RegressorMixin, clone
 import types
-import textwrap
 
 
 class KerasCodeRefinements(Signature):
-    """Suggest modifications to build_model code to improve performance."""
+    """Suggest modifications to build_model code to improve performance. Consider the history of attempted code. Use Keras 3, there is no tensorflow or tf.keras. Don't use code fences."""
 
     current_keras_code = InputField(desc="Source code of build_model method.")
     performance_log = InputField(desc="History of (code, metric) pairs.")
     optimization_goal = InputField(desc="Objective, e.g., 'improve validation scores'.")
     suggested_keras_code_modification = OutputField(
-        desc="Modified build_model method body as code. You must start with only 'def build_model(self):'"
+        desc="Modified build_model method body as code. No code fences. You must start with only 'def build_model(self):'"
     )
 
 
@@ -49,7 +57,7 @@ class Think(Module):
         verbose (bool, default=False): If True, prints the LLM's reasoning
             and suggested code during the `forward` call.
 
-    TODO: Add Keras docs, arXiv access, optimize prompts, etc.
+    TODO: Add Keras docs, arXiv access, optimize prompts, pass errors back to LLM, etc.
     """
 
     def __init__(self, verbose=False):
@@ -160,39 +168,34 @@ class KerasCortex(RegressorMixin, BaseEstimator):
             - performance_log: A list of (code_string, validation_metric)
                 tuples, recording each attempted `build_model` code and its score.
         """
-        # Initial baseline: clone the provided estimator
-        base_model = clone(base_estimator)
-        base_model.fit(X, y, **kwargs)
+        # Initial baseline: clone the provided estimator and fit
+        baseline_model = clone(base_estimator)
+        baseline_model.fit(X, y, **kwargs)
 
         X_val, y_val = validation_data
-        best_metric = base_model.score(X_val, y_val)
-        current_code = inspect.getsource(type(base_model).build_model)
+        best_metric = baseline_model.score(X_val, y_val)
+        current_code = inspect.getsource(type(baseline_model).build_model)
         performance_log = [(current_code, best_metric)]
-        # store the model that achieved best_metric
-        best_model = base_model
+
+        best_model = baseline_model
+        suggestion = current_code
 
         think = Think(verbose=self.verbose)
         for i in range(n_iterations):
             print(f"\n--- Iteration {i + 1} ---")
             try:
                 suggestion = think.forward(
-                    current_keras_code=current_code,
+                    current_keras_code=suggestion,
                     performance_log=performance_log,
-                    optimization_goal="improve validation scores",
+                    optimization_goal="improve validation metrics (R2)",
                 )
-                if suggestion.lstrip().startswith("def build_model"):
-                    new_method = suggestion
-                else:
-                    indented = textwrap.indent(suggestion, "    ")
-                    new_method = "def build_model(self):\n" + indented
                 namespace = {}
-                exec(new_method, globals(), namespace)
+                exec(suggestion, globals(), namespace)
                 build_model_fn = namespace["build_model"]
 
-                # Clone the base_estimator and override its build_model method
+                # clone from original base_estimator to avoid state pollution
                 new_model = clone(base_estimator)
                 new_model.build_model = types.MethodType(build_model_fn, new_model)
-                new_model.model = None
                 new_model.fit(X, y, **kwargs)
                 metric = new_model.score(X_val, y_val)
 
@@ -202,7 +205,6 @@ class KerasCortex(RegressorMixin, BaseEstimator):
                         f"Improvement! New validation score: {metric:.4f} > {best_metric:.4f}"
                     )
                     best_metric = metric
-                    current_code = suggestion
                     best_model = new_model
                 else:
                     print(
