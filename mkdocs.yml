@@ -19,6 +19,7 @@ nav:
       - Feature Transformers: api-reference/feature_transformers.md
       - Model Estimators: api-reference/model_estimators.md
       - Keras Cortex: api-reference/keras_cortex.md
+      - Losses: api-reference/losses.md
 theme:
   name: material
   custom_dir: docs/overrides

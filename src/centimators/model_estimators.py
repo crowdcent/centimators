@@ -559,3 +559,88 @@ class BottleneckEncoder(BaseKerasEstimator):
         """
         latent_dim = self.latent_units[0]
         return [f"latent_{i}" for i in range(latent_dim)]
+
+
+@dataclass(kw_only=True)
+class LSTMRegressor(RegressorMixin, SequenceEstimator):
+    """LSTM-based regressor for time series prediction.
+    
+    This estimator uses stacked LSTM layers to model sequential dependencies
+    in time series data. It supports bidirectional processing and various
+    normalization strategies.
+    
+    Args:
+        lstm_units (list[tuple[int, float, float]], default=[(64, 0.01, 0.01)]):
+            List of tuples defining LSTM layers. Each tuple contains:
+            - units: Number of LSTM units
+            - dropout_rate: Dropout rate applied to inputs
+            - recurrent_dropout_rate: Dropout rate applied to recurrent connections
+        use_batch_norm (bool, default=False): Whether to apply batch normalization
+            after each LSTM layer.
+        use_layer_norm (bool, default=False): Whether to apply layer normalization
+            after each LSTM layer.
+        bidirectional (bool, default=False): Whether to use bidirectional LSTM layers.
+        lag_windows (list[int]): Inherited from SequenceEstimator.
+        n_features_per_timestep (int): Inherited from SequenceEstimator.
+        
+    Attributes:
+        _n_features_in_ (int | None): Inferred number of features from training data.
+    """
+    
+    lstm_units: list[tuple[int, float, float]] = field(default_factory=lambda: [(64, 0.01, 0.01)])
+    use_batch_norm: bool = False
+    use_layer_norm: bool = False
+    bidirectional: bool = False
+    metrics: list[str] | None = field(default_factory=lambda: ["mse"])
+    
+    def build_model(self):
+        """Construct the LSTM architecture."""
+        if self._n_features_in_ is None:
+            raise ValueError("Must call fit() before building the model")
+            
+        # Input layer expecting 3D tensor (batch, timesteps, features)
+        inputs = layers.Input(
+            shape=(self.seq_length, self.n_features_per_timestep), 
+            name="sequence_input"
+        )
+        
+        x = inputs
+        
+        # Stack LSTM layers
+        for layer_num, (units, dropout, recurrent_dropout) in enumerate(self.lstm_units):
+            return_sequences = layer_num < len(self.lstm_units) - 1
+            
+            lstm_layer = layers.LSTM(
+                units=units,
+                activation="tanh",
+                return_sequences=return_sequences,
+                dropout=dropout,
+                recurrent_dropout=recurrent_dropout,
+                name=f"lstm_{layer_num}"
+            )
+            
+            # Apply bidirectional wrapper if requested
+            if self.bidirectional:
+                x = layers.Bidirectional(lstm_layer, name=f"bidirectional_{layer_num}")(x)
+            else:
+                x = lstm_layer(x)
+            
+            # Apply normalization layers if requested
+            if self.use_layer_norm:
+                x = layers.LayerNormalization(name=f"layer_norm_{layer_num}")(x)
+            if self.use_batch_norm:
+                x = layers.BatchNormalization(name=f"batch_norm_{layer_num}")(x)
+        
+        # Output layer
+        outputs = layers.Dense(self.output_units, activation="linear", name="output")(x)
+        
+        # Create and compile model
+        self.model = models.Model(inputs=inputs, outputs=outputs, name="lstm_regressor")
+        
+        self.model.compile(
+            optimizer=self.optimizer(learning_rate=self.learning_rate),
+            loss=self.loss_function,
+            metrics=self.metrics,
+        )
+        
+        return self

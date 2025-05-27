@@ -2,7 +2,11 @@
 
 Centimators ships with *Keras-backed* model estimators that implement the familiar scikit-learn API.  This means you can train state-of-the-art neural networks while still benefitting from the rich tooling ecosystem around scikit-learn – cross-validation, pipelines, grid-search and more.
 
-## MLPRegressor
+## Tabular Models
+
+These models are designed for traditional tabular data where each row represents an independent observation.
+
+### MLPRegressor
 
 `centimators.model_estimators.MLPRegressor` is a minimal, fully-connected **multilayer perceptron** that works out-of-the-box for any tabular regression task.
 
@@ -16,8 +20,13 @@ grng = np.random.default_rng(seed=42)
 X = pl.DataFrame(grng.standard_normal((1000, 20)))
 y = pl.Series(grng.standard_normal(1000))
 
-estimator = MLPRegressor(hidden_units=(128, 64), dropout_rate=0.1, epochs=10)
-estimator.fit(X, y)
+estimator = MLPRegressor(
+    hidden_units=(128, 64), 
+    dropout_rate=0.1,
+    activation="relu",
+    learning_rate=0.001
+)
+estimator.fit(X, y, epochs=10)
 
 predictions = estimator.predict(X)
 print(predictions[:5])
@@ -37,21 +46,7 @@ pipeline = make_pipeline(
 pipeline.fit(X, y)
 ```
 
-## SequenceEstimator
-
-If your dataset already contains *lagged* features arranged in a flattened matrix, `SequenceEstimator` takes care of reshaping that matrix into the 3-D tensor expected by recurrent or convolutional sequence models.  You only need to specify the `lag_windows` you used during feature engineering.
-
-```python
-from centimators.model_estimators import SequenceEstimator
-
-seq_model = SequenceEstimator(
-    lag_windows=[0, 1, 2, 3, 4],         # 5 time-steps
-    n_features_per_timestep=10,          # original feature dimensionality
-    output_units=1,
-)
-```
-
-## BottleneckEncoder
+### BottleneckEncoder
 
 `centimators.model_estimators.BottleneckEncoder` implements a bottleneck autoencoder that can learn latent representations and predict targets simultaneously. This estimator:
 
@@ -67,10 +62,12 @@ from centimators.model_estimators import BottleneckEncoder
 # Create bottleneck autoencoder
 encoder = BottleneckEncoder(
     gaussian_noise=0.035,
-    encoder_units=[(1024, 0.1)],
-    latent_units=(256, 0.1),
-    ae_units=[(96, 0.4)],
-    activation="swish"
+    encoder_units=[(1024, 0.1)],  # [(units, dropout_rate), ...]
+    latent_units=(256, 0.1),       # (units, dropout_rate)
+    ae_units=[(96, 0.4)],          # prediction branch architecture
+    activation="swish",
+    reconstruction_loss_weight=1.0,
+    target_loss_weight=1.0
 )
 
 # Fit the model (learns reconstruction + target prediction)
@@ -81,4 +78,114 @@ predictions = encoder.predict(X)
 
 # Get latent space representations for dimensionality reduction
 latent_features = encoder.transform(X)
+print(f"Latent shape: {latent_features.shape}")  # (1000, 256)
+```
+
+## Sequence Models
+
+These models are designed for sequential/time-series data where temporal dependencies matter.
+
+### SequenceEstimator
+
+`SequenceEstimator` is a base class that handles the reshaping of lagged features into the 3-D tensor format required by sequence models like LSTMs and CNNs. It's not meant to be used directly, but rather inherited from by specific sequence model implementations.
+
+Key responsibilities:
+- Reshapes flattened lag matrices into (batch, timesteps, features) tensors
+- Manages sequence length and feature dimensionality
+- Provides common sequence model functionality
+
+### LSTMRegressor
+
+`centimators.model_estimators.LSTMRegressor` provides a ready-to-use LSTM implementation for time series regression. It supports stacked LSTM layers, bidirectional processing, and various normalization strategies.
+
+```python
+from centimators.model_estimators import LSTMRegressor
+from centimators.feature_transformers import LagTransformer
+
+# Create lagged features
+lag_transformer = LagTransformer(windows=[1, 2, 3, 4, 5])
+X_lagged = lag_transformer.fit_transform(X, ticker_series=tickers)
+
+# Create LSTM model
+lstm = LSTMRegressor(
+    lag_windows=[1, 2, 3, 4, 5],       # Must match lag transformer
+    n_features_per_timestep=2,          # e.g., price and volume
+    lstm_units=[
+        (128, 0.2, 0.1),                # (units, dropout, recurrent_dropout)
+        (64, 0.1, 0.1),                 # Second LSTM layer
+    ],
+    bidirectional=True,                 # Use bidirectional LSTMs
+    use_layer_norm=True,                # Layer normalization after each LSTM
+    use_batch_norm=False,               # Batch normalization (usually not both)
+    learning_rate=0.001,
+    output_units=1
+)
+
+# Fit the model
+lstm.fit(X_lagged, y, epochs=50, batch_size=32)
+
+# Make predictions
+predictions = lstm.predict(X_lagged)
+```
+
+
+## Loss Functions
+
+Centimators provides custom loss functions, alongside support for standard Keras losses.
+
+### SpearmanCorrelation
+
+`centimators.losses.SpearmanCorrelation` is a differentiable loss function that optimizes for rank correlation rather than absolute error. This is particularly useful for:
+- Ranking tasks where relative ordering matters more than exact values
+- Financial signals where direction and magnitude are more important than precise predictions
+- Robust training in the presence of outliers
+
+```python
+from centimators.losses import SpearmanCorrelation
+from centimators.model_estimators import MLPRegressor
+
+# Optimize for rank correlation
+model = MLPRegressor(
+    hidden_units=(128, 64),
+    loss_function=SpearmanCorrelation(regularization_strength=1e-3),
+    metrics=["mae", "mse"]
+)
+```
+
+### CombinedLoss
+
+`centimators.losses.CombinedLoss` blends mean squared error with Spearman correlation, allowing you to optimize for both accurate predictions and correct ranking simultaneously:
+
+```python
+from centimators.losses import CombinedLoss
+from centimators.model_estimators import LSTMRegressor
+
+# Balance between MSE and rank correlation
+combined_loss = CombinedLoss(
+    mse_weight=2.0,           # Weight for mean squared error
+    spearman_weight=1.0,      # Weight for Spearman correlation
+    spearman_regularization=1e-3
+)
+
+lstm = LSTMRegressor(
+    lag_windows=[1, 2, 3, 4, 5],
+    n_features_per_timestep=2,
+    lstm_units=[(128, 0.2, 0.1)],
+    loss_function=combined_loss
+)
+```
+
+### Standard Keras Losses
+
+All estimators also support standard Keras loss functions:
+
+```python
+from keras.losses import Huber
+
+# Using Huber loss for robust regression
+model = MLPRegressor(
+    hidden_units=(128, 64),
+    loss_function=Huber(delta=1.0),  # Or just "huber"
+    metrics=["mae", "mse"]
+)
 ```

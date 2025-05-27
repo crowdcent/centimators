@@ -32,13 +32,23 @@ lagged_features = lag_transformer.fit_transform(
 )
 ```
 
-For modeling your features, use centimators's model estimators. A family of Keras-backed estimators are available, including MLPRegressor, BottleneckEncoder, and always more to come.
+For modeling your features, use centimators's model estimators. A family of Keras-backed estimators are available, including MLPRegressor, BottleneckEncoder, LSTMRegressor for sequences, and always more to come.
 
 ```python
-from centimators.model_estimators import MLPRegressor
+from centimators.model_estimators import MLPRegressor, LSTMRegressor
 
+# For tabular data
 model = MLPRegressor()
 model.fit(df[feature_names], df['target'])
+
+# For sequential/time-series data
+lstm = LSTMRegressor(
+    lag_windows=[1, 2, 3, 4, 5],
+    n_features_per_timestep=len(feature_names),
+    lstm_units=[(64, 0.2, 0.1)],
+    bidirectional=True
+)
+lstm.fit(lagged_features, df['target'])
 ```
 
 ## Getting Started
