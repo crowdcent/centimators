@@ -339,20 +339,13 @@ class BottleneckEncoder(BaseKerasEstimator):
     """
 
     gaussian_noise: float = 0.035
-    encoder_units: list[tuple[int, float]] = None
+    encoder_units: list[tuple[int, float]] = field(default_factory=lambda: [(1024, 0.1)])
     latent_units: tuple[int, float] = (256, 0.1)
-    ae_units: list[tuple[int, float]] = None
+    ae_units: list[tuple[int, float]] = field(default_factory=lambda: [(96, 0.4)])
     activation: str = "swish"
     reconstruction_loss_weight: float = 1.0
     target_loss_weight: float = 1.0
     encoder: Any = None
-
-    def __post_init__(self):
-        # Set default values for mutable fields
-        if self.encoder_units is None:
-            self.encoder_units = [(1024, 0.1)]
-        if self.ae_units is None:
-            self.ae_units = [(96, 0.4)]
 
     def build_model(self):
         """Construct the bottleneck autoencoder architecture."""

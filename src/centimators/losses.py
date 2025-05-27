@@ -16,9 +16,6 @@ Highlights:
 import keras.ops as K
 from keras.losses import Loss
 from keras.config import epsilon
-from typing import Any
-import keras
-
 
 class SpearmanCorrelation(Loss):
     """Differentiable Spearman rank correlation loss.
