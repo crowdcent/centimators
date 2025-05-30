@@ -17,11 +17,6 @@ from .model_estimators import (
 
 from .keras_cortex import KerasCortex
 
-from .losses import (
-    SpearmanCorrelation,
-    CombinedLoss,
-)
-
 __all__ = [
     # Feature transformers
     "RankTransformer",
@@ -36,7 +31,4 @@ __all__ = [
     "LSTMRegressor",
     # Keras cortex
     "KerasCortex",
-    # Losses
-    "SpearmanCorrelation",
-    "CombinedLoss",
 ]
