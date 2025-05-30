@@ -20,6 +20,52 @@ Or, using pip:
 pip install centimators
 ```
 
+## Keras Backend Configuration
+
+`centimators` uses Keras 3 for its neural network models, which supports multiple backends (JAX, TensorFlow, PyTorch). By default, `centimators` uses **JAX** as the backend and automatically installs `jax` as a dependency.
+
+### Using the Default JAX Backend
+
+No configuration needed! Just import and use:
+
+```python
+from centimators.model_estimators import MLPRegressor
+
+# JAX backend is automatically set
+model = MLPRegressor()
+```
+
+### Switching Backends
+
+If you want to use TensorFlow or PyTorch instead, you have two options:
+
+**Option 1: Set environment variable before importing**
+```python
+import os
+os.environ["KERAS_BACKEND"] = "tensorflow"  # or "torch"
+
+# Now import centimators
+from centimators.model_estimators import MLPRegressor
+```
+
+**Option 2: Use the configuration function**
+```python
+import centimators
+centimators.set_keras_backend("tensorflow")  # or "torch"
+
+# Now import model estimators
+from centimators.model_estimators import MLPRegressor
+```
+
+**Note:** If you choose TensorFlow or PyTorch, you'll need to install them separately:
+```bash
+# For TensorFlow
+uv add tensorflow
+
+# For PyTorch
+uv add torch
+```
+
 ## Quick Start
 
 `centimators` transformers and estimators are dataframe-agnostic, powered by [narwhals](https://narwhals-dev.github.io/narwhals/). You can use the same transformer seamlessly with both Pandas and Polars DataFrames. Here's an example with RankTransformer, which calculates the normalized rank of features for all tickers over time *by date*.
