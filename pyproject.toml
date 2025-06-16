@@ -1,6 +1,6 @@
 [project]
 name = "centimators"
-version = "0.1.10"
+version = "0.1.11"
 description = "essential data transformers and model estimators for ML and data science competitions"
 readme = "README.md"
 authors = [
@@ -34,6 +34,7 @@ dev-dependencies = [
     "pandas>=2.2.3",
     "polars>=1.29.0",
     "pyarrow>=20.0.0",
+    "pytest>=8.4.0",
     "ruff>=0.11.9",
     "watchdog>=6.0.0",
 ]

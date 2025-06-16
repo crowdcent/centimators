@@ -30,6 +30,28 @@ from keras import layers, models
 import numpy
 
 
+def _ensure_numpy(data, allow_series: bool = False):
+    """Convert data to numpy array, handling both numpy arrays and dataframes.
+
+    Args:
+        data: Input data (numpy array, dataframe, or series)
+        allow_series: Whether to allow series inputs
+
+    Returns:
+        numpy.ndarray: Data converted to numpy array
+    """
+    # If already a numpy array, return as-is
+    if isinstance(data, numpy.ndarray):
+        return data
+
+    # If it's a dataframe/series, use narwhals
+    try:
+        return nw.from_native(data, allow_series=allow_series).to_numpy()
+    except Exception:
+        # Fallback: try to convert directly to numpy
+        return numpy.asarray(data)
+
+
 @dataclass(kw_only=True)
 class BaseKerasEstimator(TransformerMixin, BaseEstimator, ABC):
     """Meta-estimator for Keras models following the scikit-learn API.
@@ -123,8 +145,8 @@ class BaseKerasEstimator(TransformerMixin, BaseEstimator, ABC):
             self.build_model()
 
         self.model.fit(
-            nw.from_native(X).to_numpy(),
-            y=nw.from_native(y, allow_series=True).to_numpy(),
+            _ensure_numpy(X),
+            y=_ensure_numpy(y, allow_series=True),
             batch_size=batch_size,
             epochs=epochs,
             validation_data=validation_data,
@@ -203,19 +225,19 @@ class SequenceEstimator(BaseKerasEstimator):
                 ``(n_samples, seq_length, n_features_per_timestep)``) and the
                 (potentially reshaped) validation data.
         """
-        X = nw.from_native(X).to_numpy()
+        X = _ensure_numpy(X)
         X_reshaped = ops.reshape(
             X, (X.shape[0], self.seq_length, self.n_features_per_timestep)
         )
 
         if validation_data:
             X_val, y_val = validation_data
-            X_val = nw.from_native(X_val).to_numpy()
+            X_val = _ensure_numpy(X_val)
             X_val_reshaped = ops.reshape(
                 X_val,
                 (X_val.shape[0], self.seq_length, self.n_features_per_timestep),
             )
-            validation_data = X_val_reshaped, nw.from_native(y_val).to_numpy()
+            validation_data = X_val_reshaped, _ensure_numpy(y_val)
 
         return X_reshaped, validation_data
 
@@ -238,7 +260,7 @@ class SequenceEstimator(BaseKerasEstimator):
         X_reshaped, validation_data_reshaped = self._reshape(X, validation_data)
         super().fit(
             X_reshaped,
-            y=nw.from_native(y).to_numpy(),
+            y=_ensure_numpy(y),
             validation_data=validation_data_reshaped,
             **kwargs,
         )
@@ -317,18 +339,18 @@ class BottleneckEncoder(BaseKerasEstimator):
     1. Encodes input features to a lower-dimensional latent space
     2. Decodes the latent representation back to reconstruct the input
     3. Uses an additional MLP branch to predict targets from the decoded features
-    
-    The model can be used both as a regressor (via predict) and as a transformer 
+
+    The model can be used both as a regressor (via predict) and as a transformer
     (via transform) to get latent space representations for dimensionality reduction.
 
     Args:
         gaussian_noise (float, default=0.035): Standard deviation of Gaussian noise
             applied to inputs for regularization.
-        encoder_units (list[tuple[int, float]], default=[(1024, 0.1)]): List of 
+        encoder_units (list[tuple[int, float]], default=[(1024, 0.1)]): List of
             (units, dropout_rate) tuples defining the encoder architecture.
-        latent_units (tuple[int, float], default=(256, 0.1)): Tuple of 
+        latent_units (tuple[int, float], default=(256, 0.1)): Tuple of
             (units, dropout_rate) for the latent bottleneck layer.
-        ae_units (list[tuple[int, float]], default=[(96, 0.4)]): List of 
+        ae_units (list[tuple[int, float]], default=[(96, 0.4)]): List of
             (units, dropout_rate) tuples for the autoencoder prediction branch.
         activation (str, default="swish"): Activation function used throughout the network.
         reconstruction_loss_weight (float, default=1.0): Weight for the reconstruction loss.
@@ -339,7 +361,9 @@ class BottleneckEncoder(BaseKerasEstimator):
     """
 
     gaussian_noise: float = 0.035
-    encoder_units: list[tuple[int, float]] = field(default_factory=lambda: [(1024, 0.1)])
+    encoder_units: list[tuple[int, float]] = field(
+        default_factory=lambda: [(1024, 0.1)]
+    )
     latent_units: tuple[int, float] = (256, 0.1)
     ae_units: list[tuple[int, float]] = field(default_factory=lambda: [(96, 0.4)])
     activation: str = "swish"
@@ -372,7 +396,9 @@ class BottleneckEncoder(BaseKerasEstimator):
         latent_output = layers.Dropout(latent_dropout)(latent)
 
         # Create separate encoder model for transform method
-        self.encoder = models.Model(inputs=inputs, outputs=latent_output, name="encoder")
+        self.encoder = models.Model(
+            inputs=inputs, outputs=latent_output, name="encoder"
+        )
 
         # Decoder path (reverse of encoder)
         decoder = latent_output
@@ -381,9 +407,11 @@ class BottleneckEncoder(BaseKerasEstimator):
             decoder = layers.BatchNormalization()(decoder)
             decoder = layers.Activation(self.activation)(decoder)
             decoder = layers.Dropout(dropout)(decoder)
-        
+
         # Reconstruction output
-        reconstruction = layers.Dense(self._n_features_in_, name="reconstruction")(decoder)
+        reconstruction = layers.Dense(self._n_features_in_, name="reconstruction")(
+            decoder
+        )
 
         # Target prediction branch from decoded features
         target_pred = reconstruction
@@ -392,30 +420,27 @@ class BottleneckEncoder(BaseKerasEstimator):
             target_pred = layers.BatchNormalization()(target_pred)
             target_pred = layers.Activation(self.activation)(target_pred)
             target_pred = layers.Dropout(dropout)(target_pred)
-        
-        target_output = layers.Dense(self.output_units, activation="linear", name="target_prediction")(target_pred)
+
+        target_output = layers.Dense(
+            self.output_units, activation="linear", name="target_prediction"
+        )(target_pred)
 
         # Create the full model with multiple outputs
         self.model = models.Model(
-            inputs=inputs, 
+            inputs=inputs,
             outputs=[reconstruction, target_output],
-            name="bottleneck_encoder"
+            name="bottleneck_encoder",
         )
 
         # Compile with multiple losses
         self.model.compile(
             optimizer=self.optimizer(learning_rate=self.learning_rate),
-            loss={
-                "reconstruction": "mse",
-                "target_prediction": self.loss_function
-            },
+            loss={"reconstruction": "mse", "target_prediction": self.loss_function},
             loss_weights={
                 "reconstruction": self.reconstruction_loss_weight,
-                "target_prediction": self.target_loss_weight
+                "target_prediction": self.target_loss_weight,
             },
-            metrics={
-                "target_prediction": self.metrics or ["mse"]
-            }
+            metrics={"target_prediction": self.metrics or ["mse"]},
         )
 
         return self
@@ -447,7 +472,7 @@ class BottleneckEncoder(BaseKerasEstimator):
         """
         # Store input dimension and build model
         self._n_features_in_ = X.shape[1]
-        
+
         if self.distribution_strategy:
             self._setup_distribution_strategy()
 
@@ -455,26 +480,20 @@ class BottleneckEncoder(BaseKerasEstimator):
             self.build_model()
 
         # Convert inputs to numpy arrays
-        X_np = nw.from_native(X).to_numpy()
-        y_np = nw.from_native(y, allow_series=True).to_numpy()
+        X_np = _ensure_numpy(X)
+        y_np = _ensure_numpy(y, allow_series=True)
 
         # Create target dictionary for multiple outputs
-        y_dict = {
-            "reconstruction": X_np,
-            "target_prediction": y_np
-        }
+        y_dict = {"reconstruction": X_np, "target_prediction": y_np}
 
         # Handle validation data
         if validation_data is not None:
             X_val, y_val = validation_data
-            X_val_np = nw.from_native(X_val).to_numpy()
-            y_val_np = nw.from_native(y_val, allow_series=True).to_numpy()
+            X_val_np = _ensure_numpy(X_val)
+            y_val_np = _ensure_numpy(y_val, allow_series=True)
             validation_data = (
                 X_val_np,
-                {
-                    "reconstruction": X_val_np,
-                    "target_prediction": y_val_np
-                }
+                {"reconstruction": X_val_np, "target_prediction": y_val_np},
             )
 
         # Train the model
@@ -487,7 +506,7 @@ class BottleneckEncoder(BaseKerasEstimator):
             callbacks=callbacks,
             **kwargs,
         )
-        
+
         self._is_fitted = True
         return self
 
@@ -505,9 +524,9 @@ class BottleneckEncoder(BaseKerasEstimator):
         if not self.model:
             raise ValueError("Model not built. Call 'fit' first.")
 
-        X_np = nw.from_native(X).to_numpy()
+        X_np = _ensure_numpy(X)
         predictions = self.model.predict(X_np, batch_size=batch_size, **kwargs)
-        
+
         # Return only the target predictions (second output)
         return predictions[1] if isinstance(predictions, list) else predictions
 
@@ -525,7 +544,7 @@ class BottleneckEncoder(BaseKerasEstimator):
         if not self.encoder:
             raise ValueError("Encoder not built. Call 'fit' first.")
 
-        X_np = nw.from_native(X).to_numpy()
+        X_np = _ensure_numpy(X)
         return self.encoder.predict(X_np, batch_size=batch_size, **kwargs)
 
     def fit_transform(self, X, y, **kwargs) -> Any:
@@ -557,11 +576,11 @@ class BottleneckEncoder(BaseKerasEstimator):
 @dataclass(kw_only=True)
 class LSTMRegressor(RegressorMixin, SequenceEstimator):
     """LSTM-based regressor for time series prediction.
-    
+
     This estimator uses stacked LSTM layers to model sequential dependencies
     in time series data. It supports bidirectional processing and various
     normalization strategies.
-    
+
     Args:
         lstm_units (list[tuple[int, float, float]], default=[(64, 0.01, 0.01)]):
             List of tuples defining LSTM layers. Each tuple contains:
@@ -575,65 +594,70 @@ class LSTMRegressor(RegressorMixin, SequenceEstimator):
         bidirectional (bool, default=False): Whether to use bidirectional LSTM layers.
         lag_windows (list[int]): Inherited from SequenceEstimator.
         n_features_per_timestep (int): Inherited from SequenceEstimator.
-        
+
     Attributes:
         _n_features_in_ (int | None): Inferred number of features from training data.
     """
-    
-    lstm_units: list[tuple[int, float, float]] = field(default_factory=lambda: [(64, 0.01, 0.01)])
+
+    lstm_units: list[tuple[int, float, float]] = field(
+        default_factory=lambda: [(64, 0.01, 0.01)]
+    )
     use_batch_norm: bool = False
     use_layer_norm: bool = False
     bidirectional: bool = False
     metrics: list[str] | None = field(default_factory=lambda: ["mse"])
-    
+
     def build_model(self):
         """Construct the LSTM architecture."""
         if self._n_features_in_ is None:
             raise ValueError("Must call fit() before building the model")
-            
+
         # Input layer expecting 3D tensor (batch, timesteps, features)
         inputs = layers.Input(
-            shape=(self.seq_length, self.n_features_per_timestep), 
-            name="sequence_input"
+            shape=(self.seq_length, self.n_features_per_timestep), name="sequence_input"
         )
-        
+
         x = inputs
-        
+
         # Stack LSTM layers
-        for layer_num, (units, dropout, recurrent_dropout) in enumerate(self.lstm_units):
+        for layer_num, (units, dropout, recurrent_dropout) in enumerate(
+            self.lstm_units
+        ):
             return_sequences = layer_num < len(self.lstm_units) - 1
-            
+
             lstm_layer = layers.LSTM(
                 units=units,
                 activation="tanh",
                 return_sequences=return_sequences,
                 dropout=dropout,
                 recurrent_dropout=recurrent_dropout,
-                name=f"lstm_{layer_num}"
+                name=f"lstm_{layer_num}",
             )
-            
+
             # Apply bidirectional wrapper if requested
             if self.bidirectional:
-                x = layers.Bidirectional(lstm_layer, name=f"bidirectional_{layer_num}")(x)
+                x = layers.Bidirectional(lstm_layer, name=f"bidirectional_{layer_num}")(
+                    x
+                )
             else:
                 x = lstm_layer(x)
-            
+
             # Apply normalization layers if requested
             if self.use_layer_norm:
                 x = layers.LayerNormalization(name=f"layer_norm_{layer_num}")(x)
             if self.use_batch_norm:
                 x = layers.BatchNormalization(name=f"batch_norm_{layer_num}")(x)
-        
+
         # Output layer
         outputs = layers.Dense(self.output_units, activation="linear", name="output")(x)
-        
+
         # Create and compile model
         self.model = models.Model(inputs=inputs, outputs=outputs, name="lstm_regressor")
-        
+
         self.model.compile(
             optimizer=self.optimizer(learning_rate=self.learning_rate),
             loss=self.loss_function,
             metrics=self.metrics,
         )
-        
+
         return self
