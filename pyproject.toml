@@ -1,17 +1,30 @@
 [project]
 name = "centimators"
-version = "0.1.11"
+version = "0.2.0"
 description = "essential data transformers and model estimators for ML and data science competitions"
 readme = "README.md"
 authors = [
     { name = "jrosenfeld13", email = "jason@crowdcent.com" }
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
-    "keras>=3.9.2",
-    "narwhals>=1.39.0",
     "scikit-learn>=1.6.1",
-    "jax>=0.6.0",
+    "narwhals>=1.39.0",
+]
+
+[project.optional-dependencies]
+keras-jax = [
+    "keras>=3.9.2",
+    "jax>=0.6.31",
+    "jaxlib>=0.4.31",
+]
+dspy = [
+    "dspy>=2.6.24",
+]
+all = [
+    "keras>=3.9.2",
+    "jax>=0.6.31",
+    "jaxlib>=0.4.31",
     "dspy>=2.6.24",
 ]
 

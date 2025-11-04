@@ -18,7 +18,7 @@ nav:
   - API Reference:
       - Feature Transformers: api-reference/feature_transformers.md
       - Model Estimators: api-reference/model_estimators.md
-      - Keras Cortex: api-reference/keras_cortex.md
+      - Keras Cortex: api-reference/cortex.md
       - Losses: api-reference/losses.md
 theme:
   name: material

@@ -1,5 +1,3 @@
-# Feature Transformers API
-
 ::: centimators.feature_transformers
     options:
       show_root_heading: true
