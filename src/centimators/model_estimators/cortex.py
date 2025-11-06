@@ -8,17 +8,34 @@ This module provides KerasCortex, a scikit-learn compatible meta-estimator.
 import inspect
 import types
 
-import dspy
-from dspy import InputField, OutputField, Signature, Module, ChainOfThought
 from sklearn.base import BaseEstimator, RegressorMixin, clone
 
-# Make Keras APIs available to LLM-generated code via exec
-from keras import (  # noqa: F401
-    layers,
-    models,
-    regularizers,
-    optimizers,
-)
+try:
+    import dspy
+    from dspy import InputField, OutputField, Signature, Module, ChainOfThought
+except ImportError as e:
+    raise ImportError(
+        "KerasCortex requires dspy. Install with:\n"
+        "  uv add 'centimators[cortex]'\n"
+        "or:\n"
+        "  pip install 'centimators[cortex]'"
+    ) from e
+
+try:
+    # Make Keras APIs available to LLM-generated code via exec
+    from keras import (  # noqa: F401
+        layers,
+        models,
+        regularizers,
+        optimizers,
+    )
+except ImportError as e:
+    raise ImportError(
+        "KerasCortex requires keras and jax (or another Keras-compatible backend). Install with:\n"
+        "  uv add 'centimators[cortex]'\n"
+        "or:\n"
+        "  pip install 'centimators[cortex]'"
+    ) from e
 
 from .keras_estimators import MLPRegressor
 
