@@ -324,26 +324,24 @@ class DSPyMator(TransformerMixin, BaseEstimator):
             return None
 
         examples = []
-
+        
+        # Build input kwargs for each row
         if isinstance(X, numpy.ndarray):
-            # Handle numpy arrays
-            for row, label in zip(X, y):
-                kwargs = {inp: val for inp, val in zip(self.input_fields_, row)}
-                # Add target field(s) to kwargs
-                for target_name in self._target_names:
-                    kwargs[target_name] = label
-                examples.append(dspy.Example(**kwargs).with_inputs(*self.input_fields_))
+            input_kwargs_list = [
+                {inp: val for inp, val in zip(self.input_fields_, row)}
+                for row in X
+            ]
         else:
-            # Handle dataframes via narwhals
-            for row, label in zip(X.iter_rows(named=True), y):
-                kwargs = {
-                    inp: row[col]
-                    for inp, col in zip(self.input_fields_, self.feature_names)
-                }
-                # Add target field(s) to kwargs
-                for target_name in self._target_names:
-                    kwargs[target_name] = label
-                examples.append(dspy.Example(**kwargs).with_inputs(*self.input_fields_))
+            input_kwargs_list = [
+                {inp: row[col] for inp, col in zip(self.input_fields_, self.feature_names)}
+                for row in X.iter_rows(named=True)
+            ]
+        
+        # Add targets and create examples
+        for kwargs, label in zip(input_kwargs_list, y):
+            for target_name in self._target_names:
+                kwargs[target_name] = label
+            examples.append(dspy.Example(**kwargs).with_inputs(*self.input_fields_))
 
         return examples
 
