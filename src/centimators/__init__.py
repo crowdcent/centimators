@@ -4,10 +4,11 @@ import os
 from importlib import import_module
 from typing import Any
 
-# Default Keras backend to JAX (respect user override)
+# Set default Keras backend to JAX (matches centimators[keras-jax] extra).
+# Users can override by setting KERAS_BACKEND env var before import or calling
+# set_keras_backend() early. This must happen before any Keras imports.
 os.environ.setdefault("KERAS_BACKEND", "jax")
 
-# Re-export feature transformers eagerly (they don't pull heavy backends)
 from centimators.feature_transformers import (  # noqa: E402
     RankTransformer,
     LagTransformer,
@@ -16,7 +17,6 @@ from centimators.feature_transformers import (  # noqa: E402
     GroupStatsTransformer,
 )
 
-# Re-export backend config helpers
 from centimators.config import set_keras_backend, get_keras_backend  # noqa: E402
 
 __all__ = [

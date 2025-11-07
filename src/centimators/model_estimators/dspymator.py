@@ -339,8 +339,8 @@ class DSPyMator(TransformerMixin, BaseEstimator):
         
         # Add targets and create examples
         for kwargs, label in zip(input_kwargs_list, y):
-            for target_name in self._target_names:
-                kwargs[target_name] = label
+            for i, target_name in enumerate(self._target_names):
+                kwargs[target_name] = label[i] if len(self._target_names) > 1 else label
             examples.append(dspy.Example(**kwargs).with_inputs(*self.input_fields_))
 
         return examples
