@@ -77,7 +77,13 @@ class Think(Module):
 class KerasCortex(RegressorMixin, BaseEstimator):
     """A scikit-learn meta-estimator that iteratively refines a Keras model."""
 
-    def __init__(self, base_estimator=None, n_iterations=5, lm="openai/gpt-4o-mini", verbose=False):
+    def __init__(
+        self,
+        base_estimator=None,
+        n_iterations=5,
+        lm="openai/gpt-4o-mini",
+        verbose=False,
+    ):
         if base_estimator is None:
             base_estimator = MLPRegressor()
         self.base_estimator = base_estimator
@@ -86,7 +92,9 @@ class KerasCortex(RegressorMixin, BaseEstimator):
         dspy.configure(lm=self.lm)
         self.verbose = verbose
 
-    def think_loop(self, base_estimator, X, y, validation_data, n_iterations=5, **kwargs) -> tuple[BaseEstimator, list[tuple[str, float]]]:
+    def think_loop(
+        self, base_estimator, X, y, validation_data, n_iterations=5, **kwargs
+    ) -> tuple[BaseEstimator, list[tuple[str, float]]]:
         baseline_model = clone(base_estimator)
         baseline_model.fit(X, y, **kwargs)
 
@@ -118,11 +126,15 @@ class KerasCortex(RegressorMixin, BaseEstimator):
 
                 performance_log.append((suggestion, metric))
                 if metric > best_metric:
-                    print(f"Improvement! New validation score: {metric:.4f} > {best_metric:.4f}")
+                    print(
+                        f"Improvement! New validation score: {metric:.4f} > {best_metric:.4f}"
+                    )
                     best_metric = metric
                     best_model = new_model
                 else:
-                    print(f"No improvement ({metric:.4f} <= {best_metric:.4f}), keeping best code.")
+                    print(
+                        f"No improvement ({metric:.4f} <= {best_metric:.4f}), keeping best code."
+                    )
             except Exception as e:
                 print("Error during optimization iteration:", e)
                 break
@@ -144,5 +156,3 @@ class KerasCortex(RegressorMixin, BaseEstimator):
         if not hasattr(self, "best_model_"):
             raise ValueError("Estimator not fitted. Call 'fit' first.")
         return self.best_model_.predict(X)
-
-

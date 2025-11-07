@@ -49,7 +49,7 @@ _LAZY_IMPORTS = {
     # DSPy estimator
     "DSPyMator": "centimators.model_estimators.dspymator",
     # Meta-estimator
-    "KerasCortex": "centimators.model_estimators.cortex",
+    "KerasCortex": "centimators.model_estimators.keras_cortex",
 }
 
 
@@ -61,4 +61,3 @@ def __getattr__(name: str) -> Any:
     attr = getattr(module, name)
     globals()[name] = attr  # cache
     return attr
-

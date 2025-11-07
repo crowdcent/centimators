@@ -30,16 +30,17 @@ _LAZY_IMPORTS: dict[str, str] = {
     # DSPy estimator
     "DSPyMator": "centimators.model_estimators.dspymator",
     # Meta-estimator
-    "KerasCortex": "centimators.model_estimators.cortex",
+    "KerasCortex": "centimators.model_estimators.keras_cortex",
 }
 
 
 def __getattr__(name: str) -> Any:
     module_path = _LAZY_IMPORTS.get(name)
     if module_path is None:
-        raise AttributeError(f"module 'centimators.model_estimators' has no attribute {name!r}")
+        raise AttributeError(
+            f"module 'centimators.model_estimators' has no attribute {name!r}"
+        )
     module = import_module(module_path)
     attr = getattr(module, name)
     globals()[name] = attr  # cache for future access
     return attr
-

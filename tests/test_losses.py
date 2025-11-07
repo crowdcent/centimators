@@ -32,4 +32,6 @@ def test_combined_loss_positive():
     spearman = SpearmanCorrelation()(y_true, y_pred)
     expected = loss_fn.mse_weight * mse + loss_fn.spearman_weight * spearman
 
-    assert pytest.approx(K.convert_to_numpy(loss_val), rel=1e-5) == K.convert_to_numpy(expected) 
+    assert pytest.approx(K.convert_to_numpy(loss_val), rel=1e-5) == K.convert_to_numpy(
+        expected
+    )

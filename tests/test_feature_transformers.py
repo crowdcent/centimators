@@ -26,7 +26,9 @@ def _make_simple_frame():
 def test_rank_transformer():
     df = _make_simple_frame()
     tr = RankTransformer(feature_names=["feature1", "feature2"])
-    ranked = tr.fit_transform(df.select(["feature1", "feature2"]), date_series=df["date"])
+    ranked = tr.fit_transform(
+        df.select(["feature1", "feature2"]), date_series=df["date"]
+    )
 
     # Within each date the higher value should get rank 1.0, lower 0.5 because 2 rows.
     assert pytest.approx(ranked["feature1_rank"][0]) == 0.5
@@ -80,4 +82,4 @@ def test_group_stats_transformer():
     # Mean across two features row 0: (10 + 1)/2 = 5.5
     assert pytest.approx(stats_df["grp_groupstats_mean"][0]) == 5.5
     # Range across row 0: max-min = 10-1 = 9
-    assert pytest.approx(stats_df["grp_groupstats_range"][0]) == 9 
+    assert pytest.approx(stats_df["grp_groupstats_range"][0]) == 9

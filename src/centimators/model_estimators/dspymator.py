@@ -20,18 +20,18 @@ import dspy
 @dataclass(kw_only=True)
 class DSPyMator(TransformerMixin, BaseEstimator):
     """Scikit-learn compatible wrapper for DSPy modules.
-    
+
     Integrates DSPy programs (e.g., ChainOfThought, Predict) into the centimators
     ecosystem, enabling LLM-based predictions that work seamlessly with sklearn
-    pipelines, cross-validation, and other ML tooling. DSPyMator turns a 
-    DSPy `Module` (e.g., `ChainOfThought`, `Predict`) and optimizer (e.g., `GEPA`, 
-    `BootstrapFewShot`, `MIPROv2`) into a standard scikit-learn 
+    pipelines, cross-validation, and other ML tooling. DSPyMator turns a
+    DSPy `Module` (e.g., `ChainOfThought`, `Predict`) and optimizer (e.g., `GEPA`,
+    `BootstrapFewShot`, `MIPROv2`) into a standard scikit-learn
     estimator/transformer that operates on tabular rows.
-    
+
     The estimator is dataframe-agnostic through narwhals, accepting Polars,
     Pandas, or numpy arrays. Input features are automatically mapped to the DSPy
     program's signature fields based on `feature_names` or column names.
-    
+
     Execution Modes:
         By default, uses asynchronous execution (`use_async=True`) with bounded
         concurrency for efficient batch processing. Set `use_async=False` for
@@ -39,7 +39,7 @@ class DSPyMator(TransformerMixin, BaseEstimator):
         (e.g., in Jupyter notebooks) when `nest_asyncio` is installed. Current async
         support with asyncio means that concurrent requests are best handled for API
         requests, rather than for fine-tuning of local models' weights.
-    
+
     Output Methods:
         - `predict(X)`: Returns target predictions as numpy arrays. For a single
           target field, returns a 1D array (n_samples,). For multiple targets,
@@ -47,65 +47,65 @@ class DSPyMator(TransformerMixin, BaseEstimator):
         - `transform(X)`: Returns all output fields from the DSPy program
           (including reasoning, intermediate steps, etc.) as a dataframe in the
           same backend as the input. Use this to access full program outputs.
-    
+
     Progress Tracking:
         When `verbose=True`, displays progress bars using tqdm. Requires `tqdm`
         for sync mode and `tqdm.asyncio` for async mode. Falls back gracefully
         if tqdm is not installed.
-    
+
     Optimization:
         DSPyMator supports automatic prompt optimization via any DSPy optimizer.
         Pass a configured optimizer instance (e.g., `dspy.GEPA`, `dspy.BootstrapFewShot`,
         `dspy.MIPROv2`, etc.) to `fit()` to optimize prompts during training.
-        
+
         Different optimizers have different requirements:
-        
-        - **Few-shot optimizers** (e.g., `BootstrapFewShot`, `LabeledFewShot`): 
+
+        - **Few-shot optimizers** (e.g., `BootstrapFewShot`, `LabeledFewShot`):
           Only need `trainset`. Pass `validation_data=None`.
-        
-        - **Instruction optimizers** (e.g., `GEPA`, `MIPROv2`, `COPRO`): 
+
+        - **Instruction optimizers** (e.g., `GEPA`, `MIPROv2`, `COPRO`):
           Need both `trainset` and `valset`. Provide validation data via `validation_data`.
-        
-        - **Finetuning optimizers** (e.g., `BootstrapFinetune`): 
+
+        - **Finetuning optimizers** (e.g., `BootstrapFinetune`):
           May have specific requirements. Consult optimizer documentation.
-        
+
         To use optimization:
-        
+
         1. Create an optimizer instance:
-        
+
         ```python
         # Example: GEPA for instruction optimization
         gepa = dspy.GEPA(metric=my_metric, auto='light')
-        
+
         # Example: BootstrapFewShot for few-shot learning
         bootstrap = dspy.BootstrapFewShot()
-        
+
         # Example: MIPROv2 for instruction optimization
         mipro = dspy.MIPROv2(metric=my_metric)
         ```
-        
+
         2. Pass the optimizer to fit():
-        
+
         ```python
         # With validation split (for optimizers that need valset)
         estimator.fit(X_train, y_train, optimizer=gepa, validation_data=0.2)
-        
+
         # With explicit validation set
         estimator.fit(X_train, y_train, optimizer=gepa, validation_data=(X_val, y_val))
-        
+
         # Without validation (for optimizers that only need trainset)
         estimator.fit(X_train, y_train, optimizer=bootstrap, validation_data=None)
-        
+
         # To use trainset as valset, pass it explicitly
         estimator.fit(X_train, y_train, optimizer=gepa, validation_data=(X_train, y_train))
         ```
-        
+
         After optimization, the original program is stored in `original_program_`
         and optimizer results are available in `optimizer_results_` for inspection
         (if the optimizer provides detailed results).
-        
+
         For more details on optimizers, see: https://dspy.ai/learn/optimization/optimizers/
-    
+
     Parameters:
         program: DSPy module (e.g., dspy.ChainOfThought, dspy.Predict) with a signature
             defining input and output fields. The signature must be accessible
@@ -126,23 +126,23 @@ class DSPyMator(TransformerMixin, BaseEstimator):
             `use_async=True`. Defaults to 50.
         verbose: Whether to display progress bars during prediction. Defaults to True.
             Requires `tqdm` package for sync mode or `tqdm.asyncio` for async mode.
-    
+
     Examples:
         Basic usage with a ChainOfThought or Predict program:
-        
+
         ```python
         import dspy
         from centimators.model_estimators import DSPyMator
-        
+
         # Create a DSPy program (e.g., Predict, ChainOfThought, etc.)
         program = dspy.Predict("text -> sentiment")
-        
+
         # Create estimator
         estimator = DSPyMator(
             program=program,
             target_names="sentiment"
         )
-        
+
         X_train = pl.DataFrame({
             "text": ["I love this product!", "This is terrible.", "It's okay."]
         })
@@ -151,13 +151,13 @@ class DSPyMator(TransformerMixin, BaseEstimator):
         # Fit and predict (get only target predictions)
         estimator.fit(X_train, y_train)  # y_train can be None
         predictions = estimator.predict(X_test)  # numpy array
-        
+
         # Get all outputs (including reasoning and other intermediate steps of the program)
         full_outputs = estimator.transform(X_test)  # dataframe
-        
+
         # With optimization:
         import dspy
-        
+
         gepa = dspy.GEPA(metric=my_metric, auto='light')
         estimator.fit(X_train, y_train, optimizer=gepa, validation_data=0.2)
         ```
@@ -175,13 +175,15 @@ class DSPyMator(TransformerMixin, BaseEstimator):
 
     def _get_signature(self):
         """Extract signature from the DSPy program.
-        
+
         ChainOfThought stores signature in .predict.signature, while other
         modules may expose it directly as .signature.
         """
-        if hasattr(self.program, 'predict') and hasattr(self.program.predict, 'signature'):
+        if hasattr(self.program, "predict") and hasattr(
+            self.program.predict, "signature"
+        ):
             return self.program.predict.signature
-        elif hasattr(self.program, 'signature'):
+        elif hasattr(self.program, "signature"):
             return self.program.signature
         else:
             raise ValueError(
@@ -206,10 +208,10 @@ class DSPyMator(TransformerMixin, BaseEstimator):
         y,
         optimizer: Any | None = None,
         validation_data: "tuple[Any, Any] | float | None" = None,
-        **kwargs
+        **kwargs,
     ):
         """Fit the DSPyMator estimator.
-        
+
         Parameters:
             X: Training data (dataframe or numpy array).
             y: Target values (can be None for unsupervised tasks).
@@ -221,26 +223,28 @@ class DSPyMator(TransformerMixin, BaseEstimator):
                 - If None: No validation set (for optimizers that only need trainset).
                   To use trainset as valset, pass `(X, y)` explicitly, although some
                   optimizers may automatically use the trainset as valset if None is passed.
-        
+
         Returns:
             self: The fitted estimator.
-        
+
         Examples:
             Basic fitting without optimization:
-            
+
             ```python
             estimator = DSPyMator(program=program, target_names='label')
             estimator.fit(X_train, y_train)
             ```
-            
+
             With optimizer using auto-split validation:
-            
+
             ```python
             gepa_optimizer = dspy.GEPA(metric=my_metric, auto='light', ..., **kwargs)
             estimator.fit(X_train, y_train, optimizer=gepa_optimizer, validation_data=0.2)
             ```
         """
-        self.lm_ = dspy.LM(self.lm, temperature=self.temperature, max_tokens=self.max_tokens)
+        self.lm_ = dspy.LM(
+            self.lm, temperature=self.temperature, max_tokens=self.max_tokens
+        )
 
         self.input_fields_ = list(self.signature_.input_fields.keys())
 
@@ -271,36 +275,35 @@ class DSPyMator(TransformerMixin, BaseEstimator):
                 # Use provided validation set
                 X_train, y_train = X, y
                 X_val, y_val = validation_data
-            
+
             # Store original program before optimization
             self.original_program_ = self.program
-            
+
             # Convert data to DSPy Examples
             train_examples = self._convert_to_examples(X_train, y_train)
-            val_examples = self._convert_to_examples(X_val, y_val) if X_val is not None else None
-            
+            val_examples = (
+                self._convert_to_examples(X_val, y_val) if X_val is not None else None
+            )
+
             # Run optimizer compilation
             compile_kwargs = {
                 "trainset": train_examples,
                 **({"valset": val_examples} if val_examples is not None else {}),
-                **kwargs
+                **kwargs,
             }
 
             with dspy.context(lm=self.lm_):
-                optimized_program = optimizer.compile(
-                    self.program,
-                    **compile_kwargs
-                )
-            
+                optimized_program = optimizer.compile(self.program, **compile_kwargs)
+
             # Update program with optimized version
             self.program = optimized_program
-            
+
             # Refresh signature and input_fields after optimization
             self.signature_ = self._get_signature()
             self.input_fields_ = list(self.signature_.input_fields.keys())
-            
+
             # Store optimizer results for inspection
-            if hasattr(optimized_program, 'detailed_results'):
+            if hasattr(optimized_program, "detailed_results"):
                 self.optimizer_results_ = optimized_program.detailed_results
 
         self._is_fitted = True
@@ -309,55 +312,65 @@ class DSPyMator(TransformerMixin, BaseEstimator):
     @nw.narwhalify
     def _convert_to_examples(self, X, y):
         """Convert X, y data to DSPy Example objects.
-        
+
         Parameters:
             X: Input features (dataframe or numpy array). Can be None.
             y: Target values. Can be None.
-        
+
         Returns:
             List of dspy.Example objects with inputs marked, or None if X is None.
         """
         if X is None:
             return None
-        
+
         examples = []
-        
+
         if isinstance(X, numpy.ndarray):
             # Handle numpy arrays
             for row, label in zip(X, y):
-                kwargs = {inp: str(val) for inp, val in zip(self.input_fields_, row)}
+                kwargs = {inp: val for inp, val in zip(self.input_fields_, row)}
                 # Add target field(s) to kwargs
                 for target_name in self._target_names:
-                    kwargs[target_name] = str(label)
+                    kwargs[target_name] = label
                 examples.append(dspy.Example(**kwargs).with_inputs(*self.input_fields_))
         else:
             # Handle dataframes via narwhals
             for row, label in zip(X.iter_rows(named=True), y):
-                kwargs = {inp: str(row[col]) for inp, col in zip(self.input_fields_, self.feature_names)}
+                kwargs = {
+                    inp: row[col]
+                    for inp, col in zip(self.input_fields_, self.feature_names)
+                }
                 # Add target field(s) to kwargs
                 for target_name in self._target_names:
-                    kwargs[target_name] = str(label)
+                    kwargs[target_name] = label
                 examples.append(dspy.Example(**kwargs).with_inputs(*self.input_fields_))
-        
+
         return examples
 
     @nw.narwhalify
     def _iter_input_kwargs(self, X):
         if isinstance(X, numpy.ndarray):
             for row in X:
-                yield {inp: str(val) for inp, val in zip(self.input_fields_, row)}
+                yield {inp: val for inp, val in zip(self.input_fields_, row)}
         else:
             for row in X.iter_rows(named=True):
-                yield {inp: str(row[col]) for inp, col in zip(self.input_fields_, self.feature_names)}
+                yield {
+                    inp: row[col]
+                    for inp, col in zip(self.input_fields_, self.feature_names)
+                }
 
     def _predict_raw_sync(self, X):
         """Synchronously predict all samples with optional progress bar."""
         input_kwargs = list(self._iter_input_kwargs(X))
-        
+
         if self.verbose:
             try:
                 from tqdm import tqdm
-                return [self.program(**kwargs) for kwargs in tqdm(input_kwargs, desc="DSPyMator predicting")]
+
+                return [
+                    self.program(**kwargs)
+                    for kwargs in tqdm(input_kwargs, desc="DSPyMator predicting")
+                ]
             except ImportError:
                 warnings.warn(
                     "tqdm not installed; progress bar unavailable. Install tqdm for progress tracking.",
@@ -371,16 +384,17 @@ class DSPyMator(TransformerMixin, BaseEstimator):
         """Asynchronously predict all samples with bounded concurrency and optional progress bar."""
         input_kwargs = list(self._iter_input_kwargs(X))
         semaphore = asyncio.Semaphore(self.max_concurrent)
-        
+
         async def run_one(kwargs):
             async with semaphore:
                 return await self.program.acall(**kwargs)
-        
+
         tasks = [run_one(kwargs) for kwargs in input_kwargs]
-        
+
         if self.verbose:
             try:
                 from tqdm.asyncio import tqdm as tqdm_asyncio
+
                 return await tqdm_asyncio.gather(*tasks, desc="DSPyMator predicting")
             except ImportError:
                 warnings.warn(
@@ -396,12 +410,13 @@ class DSPyMator(TransformerMixin, BaseEstimator):
         with dspy.context(lm=self.lm_):
             if not self.use_async:
                 return self._predict_raw_sync(X)
-            
+
             try:
                 loop = asyncio.get_running_loop()
                 # Already in an event loop, use nest_asyncio to enable nested loops
                 try:
                     import nest_asyncio
+
                     nest_asyncio.apply()
                     return asyncio.run(self._predict_raw_async(X))
                 except ImportError:
@@ -426,14 +441,16 @@ class DSPyMator(TransformerMixin, BaseEstimator):
                 return numpy.array([], dtype=object)
             return numpy.empty((0, len(fields)), dtype=object)
 
-        labels = numpy.array([[getattr(pred, field) for field in fields] for pred in preds])
+        labels = numpy.array(
+            [[getattr(pred, field) for field in fields] for pred in preds]
+        )
         return labels.squeeze(axis=1) if len(fields) == 1 else labels
 
     def _get_output_fields(self):
         """Get all output fields for transform."""
         signature = self._get_signature()
         output_fields = signature.output_fields.keys()
-        
+
         return output_fields
 
     @nw.narwhalify
@@ -443,10 +460,13 @@ class DSPyMator(TransformerMixin, BaseEstimator):
 
         output_fields = self._get_output_fields()
         preds = self._predict_raw(X)
-        
+
         # Build a dictionary of columns
-        data = {field: [getattr(pred, field, None) for pred in preds] for field in output_fields}
-        
+        data = {
+            field: [getattr(pred, field, None) for pred in preds]
+            for field in output_fields
+        }
+
         # Create a dataframe in the same backend as input X
         native_namespace = nw.get_native_namespace(X)
         return nw.from_dict(data, native_namespace=native_namespace)
@@ -459,5 +479,3 @@ class DSPyMator(TransformerMixin, BaseEstimator):
 
     def __sklearn_is_fitted__(self):
         return getattr(self, "_is_fitted", False)
-
-

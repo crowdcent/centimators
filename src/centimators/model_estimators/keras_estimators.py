@@ -189,7 +189,9 @@ class BottleneckEncoder(BaseKerasEstimator):
     """A bottleneck autoencoder that can learn latent representations and predict targets."""
 
     gaussian_noise: float = 0.035
-    encoder_units: list[tuple[int, float]] = field(default_factory=lambda: [(1024, 0.1)])
+    encoder_units: list[tuple[int, float]] = field(
+        default_factory=lambda: [(1024, 0.1)]
+    )
     latent_units: tuple[int, float] = (256, 0.1)
     ae_units: list[tuple[int, float]] = field(default_factory=lambda: [(96, 0.4)])
     activation: str = "swish"
@@ -217,7 +219,9 @@ class BottleneckEncoder(BaseKerasEstimator):
         latent = layers.Activation(self.activation)(latent)
         latent_output = layers.Dropout(latent_dropout)(latent)
 
-        self.encoder = models.Model(inputs=inputs, outputs=latent_output, name="encoder")
+        self.encoder = models.Model(
+            inputs=inputs, outputs=latent_output, name="encoder"
+        )
 
         decoder = latent_output
         for units, dropout in reversed(self.encoder_units):
@@ -226,7 +230,9 @@ class BottleneckEncoder(BaseKerasEstimator):
             decoder = layers.Activation(self.activation)(decoder)
             decoder = layers.Dropout(dropout)(decoder)
 
-        reconstruction = layers.Dense(self._n_features_in_, name="reconstruction")(decoder)
+        reconstruction = layers.Dense(self._n_features_in_, name="reconstruction")(
+            decoder
+        )
 
         target_pred = reconstruction
         for units, dropout in self.ae_units:
@@ -235,7 +241,9 @@ class BottleneckEncoder(BaseKerasEstimator):
             target_pred = layers.Activation(self.activation)(target_pred)
             target_pred = layers.Dropout(dropout)(target_pred)
 
-        target_output = layers.Dense(self.output_units, activation="linear", name="target_prediction")(target_pred)
+        target_output = layers.Dense(
+            self.output_units, activation="linear", name="target_prediction"
+        )(target_pred)
 
         self.model = models.Model(
             inputs=inputs,
@@ -324,7 +332,9 @@ class BottleneckEncoder(BaseKerasEstimator):
 class LSTMRegressor(RegressorMixin, SequenceEstimator):
     """LSTM-based regressor for time series prediction."""
 
-    lstm_units: list[tuple[int, float, float]] = field(default_factory=lambda: [(64, 0.01, 0.01)])
+    lstm_units: list[tuple[int, float, float]] = field(
+        default_factory=lambda: [(64, 0.01, 0.01)]
+    )
     use_batch_norm: bool = False
     use_layer_norm: bool = False
     bidirectional: bool = False
@@ -339,7 +349,9 @@ class LSTMRegressor(RegressorMixin, SequenceEstimator):
         )
         x = inputs
 
-        for layer_num, (units, dropout, recurrent_dropout) in enumerate(self.lstm_units):
+        for layer_num, (units, dropout, recurrent_dropout) in enumerate(
+            self.lstm_units
+        ):
             return_sequences = layer_num < len(self.lstm_units) - 1
             lstm_layer = layers.LSTM(
                 units=units,
@@ -350,7 +362,9 @@ class LSTMRegressor(RegressorMixin, SequenceEstimator):
                 name=f"lstm_{layer_num}",
             )
             if self.bidirectional:
-                x = layers.Bidirectional(lstm_layer, name=f"bidirectional_{layer_num}")(x)
+                x = layers.Bidirectional(lstm_layer, name=f"bidirectional_{layer_num}")(
+                    x
+                )
             else:
                 x = lstm_layer(x)
             if self.use_layer_norm:
@@ -366,5 +380,3 @@ class LSTMRegressor(RegressorMixin, SequenceEstimator):
             metrics=self.metrics,
         )
         return self
-
-
