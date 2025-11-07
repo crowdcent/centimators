@@ -16,9 +16,9 @@ try:
 except ImportError as e:
     raise ImportError(
         "KerasCortex requires dspy. Install with:\n"
-        "  uv add 'centimators[cortex]'\n"
+        "  uv add 'centimators[dspy]'\n"
         "or:\n"
-        "  pip install 'centimators[cortex]'"
+        "  pip install 'centimators[dspy]'"
     ) from e
 
 try:
@@ -32,9 +32,9 @@ try:
 except ImportError as e:
     raise ImportError(
         "KerasCortex requires keras and jax (or another Keras-compatible backend). Install with:\n"
-        "  uv add 'centimators[cortex]'\n"
+        "  uv add 'centimators[keras-jax]'\n"
         "or:\n"
-        "  pip install 'centimators[cortex]'"
+        "  pip install 'centimators[keras-jax]'"
     ) from e
 
 from .keras_estimators import MLPRegressor
