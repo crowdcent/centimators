@@ -26,6 +26,7 @@ all = [
     "jax>=0.6.31",
     "jaxlib>=0.4.31",
     "dspy>=2.6.24",
+    "umap-learn>=0.5.9.post2",
 ]
 
 [build-system]
@@ -46,9 +47,12 @@ dev-dependencies = [
     "numpy>=2.2.5",
     "pandas>=2.2.3",
     "polars>=1.29.0",
+    "pre-commit>=4.0.0",
     "pyarrow>=20.0.0",
     "pytest>=8.4.0",
+    "pytest-cov>=6.0.0",
     "ruff>=0.11.9",
+    "ty>=0.0.1a25",
     "watchdog>=6.0.0",
 ]
 
@@ -56,3 +60,4 @@ dev-dependencies = [
 exclude = [
   "/docs/**"
 ]
+

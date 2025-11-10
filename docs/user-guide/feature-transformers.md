@@ -21,6 +21,7 @@ ranked_features = ranker.fit_transform(
 ```
 
 **Key Features:**
+
 - Normalizes ranks to [0, 1] range
 - Handles missing values gracefully
 - Groups by any categorical variable (typically dates)
@@ -45,6 +46,7 @@ lagged_features = lagger.fit_transform(
 ```
 
 **Key Features:**
+
 - Preserves temporal ordering within groups
 - Prevents data leakage across different assets
 - Configurable lag windows
@@ -69,9 +71,9 @@ ma_features = ma_transformer.fit_transform(
 ```
 
 **Key Features:**
+
 - Rolling window calculations within groups
 - Multiple window sizes in single transformation
-- Handles edge cases (insufficient data) naturally
 
 ## LogReturnTransformer
 
@@ -88,11 +90,6 @@ returns = log_return_transformer.fit_transform(
 )
 # Output: close_logreturn, open_logreturn
 ```
-
-**Key Features:**
-- Mathematically sound return calculation
-- Handles zero/negative values appropriately  
-- Maintains group boundaries (no cross-ticker contamination)
 
 ## GroupStatsTransformer
 
@@ -117,12 +114,57 @@ group_stats = stats_transformer.fit_transform(X)
 ```
 
 **Available Statistics:**
+
 - `mean`: Average across the group
 - `std`: Standard deviation (sample, ddof=1)
 - `skew`: Skewness (bias-corrected)
 - `kurt`: Excess kurtosis (bias-corrected)
 - `range`: Max - Min
 - `cv`: Coefficient of variation (std/mean)
+
+## DimReducer
+
+Reduces the dimensionality of features using PCA, t-SNE, or UMAP. Useful for compressing high-dimensional feature spaces, visualization, and removing noise.
+
+```python
+from centimators.feature_transformers import DimReducer
+
+# PCA: Fast, linear, preserves global structure
+pca_reducer = DimReducer(
+    method='pca',
+    n_components=10,
+    feature_names=['feature1', 'feature2', 'feature3', 'feature4']
+)
+reduced_features = pca_reducer.fit_transform(X)
+# Output: dim_0, dim_1, ..., dim_9
+
+# t-SNE: Non-linear, preserves local structure (good for visualization)
+tsne_reducer = DimReducer(
+    method='tsne',
+    n_components=2,
+    random_state=42,
+    perplexity=30  # Additional kwargs passed to sklearn.manifold.TSNE
+)
+viz_features = tsne_reducer.fit_transform(X)
+# Output: dim_0, dim_1
+
+# UMAP: Non-linear, preserves local + global structure
+# Requires: uv add 'centimators[all]'
+umap_reducer = DimReducer(
+    method='umap',
+    n_components=5,
+    random_state=42,
+    n_neighbors=15  # Additional kwargs passed to umap.UMAP
+)
+reduced_features = umap_reducer.fit_transform(X)
+# Output: dim_0, dim_1, dim_2, dim_3, dim_4
+```
+
+**Available Methods:**
+
+- `pca`: Principal Component Analysis (linear, fast, deterministic)
+- `tsne`: t-distributed Stochastic Neighbor Embedding (non-linear, stochastic, visualization)
+- `umap`: Uniform Manifold Approximation and Projection (non-linear, balanced, requires `centimators[all]`)
 
 ## Pipeline Integration
 
@@ -152,5 +194,74 @@ transformed = pipeline.fit_transform(
 ```
 
 **Metadata Routing:**
+
 - `date_series`: Used by `RankTransformer` for cross-sectional ranking
-- `ticker_series`: Used by temporal transformers (`LagTransformer`, `MovingAverageTransformer`, `LogReturnTransformer`) to maintain asset boundaries 
+- `ticker_series`: Used by temporal transformers (`LagTransformer`, `MovingAverageTransformer`, `LogReturnTransformer`) to maintain asset boundaries
+
+## EmbeddingTransformer
+
+!!! note "Requires DSPy"
+    This transformer requires the `dspy` optional dependency. Install with:
+    ```bash
+    uv add 'centimators[dspy]'
+    ```
+
+Embeds text and categorical features into dense vector representations using [DSPy's Embedder](https://dspy.ai/api/models/Embedder/). Supports both hosted embedding models (OpenAI, Cohere, etc.) and custom local models.
+
+### Basic Text Embedding
+
+```python
+from centimators.feature_transformers import EmbeddingTransformer
+
+# Using a hosted model
+embedder = EmbeddingTransformer(
+    model="openai/text-embedding-3-small",
+    feature_names=['news_headline', 'company_description']
+)
+
+embedded_features = embedder.fit_transform(df[['news_headline', 'company_description']])
+# Output: news_headline_embed_0, news_headline_embed_1, ..., news_headline_embed_1535
+#         company_description_embed_0, company_description_embed_1, ..., etc.
+```
+
+### Local Model (Sentence Transformers)
+
+```python
+from sentence_transformers import SentenceTransformer
+
+# Load a local embedding model
+model = SentenceTransformer('all-MiniLM-L6-v2')
+
+embedder = EmbeddingTransformer(
+    model=model.encode,  # Pass the encode function
+    feature_names=['text_column'],
+    batch_size=100
+)
+
+embedded_features = embedder.fit_transform(df[['text_column']])
+# Output: text_column_embed_0, text_column_embed_1, ..., text_column_embed_383
+```
+
+### Custom Embedding Function
+
+```python
+import numpy as np
+
+def custom_embedder(texts):
+    """Custom embedding function - must return numpy array."""
+    # Your custom logic here
+    embeddings = your_model.embed(texts)
+    return np.array(embeddings, dtype=np.float32)
+
+embedder = EmbeddingTransformer(
+    model=custom_embedder,
+    feature_names=['text_feature']
+)
+```
+
+**Key Features:**
+- Supports both hosted (via litellm) and local embedding models
+- Handles null values (fills with zero vectors)
+- Automatically expands embeddings into sklearn-compatible columns
+- Backend-agnostic (works with Polars, Pandas)
+- Configurable batch size and caching for hosted models

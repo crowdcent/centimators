@@ -2,13 +2,45 @@
 
 # Centimators: essential data transformers and model estimators for ML and data science competitions
 
-`centimators` is an open-source python library built on scikit-learn, keras, and narwhals: designed for building and sharing <mark>dataframe-agnostic</mark> (pandas/polars), <mark>multi-framework</mark> (jax/tf/pytorch), <mark>sklearn-style</mark> (fit/transform/predict) transformers, meta-estimators, and machine learning models for data science competitions like Numerai, Kaggle, and the CrowdCent Challenge.
+`centimators` is an open-source python library built on scikit-learn, keras, DSPy, and narwhals: designed for building and sharing <mark>dataframe-agnostic</mark> (pandas/polars), <mark>multi-framework</mark> (jax/tf/pytorch/DSPy), <mark>sklearn-style</mark> (fit/transform/predict) transformers, meta-estimators, and machine learning models for data science competitions like Numerai, Kaggle, and the CrowdCent Challenge.
 
 ## Built for …
 
 | 🏆 **Competition Data Scientists** | 📊 **Financial-ML Engineers** | ⚡ **Performance Hunters** | 🧠 **Neural Network Architects** |
 |------------------------------------|------------------------------|---------------------------|-----------------------------------|
 | Iterate fast on Numerai, Kaggle, & CrowdCent submissions without reinventing feature engineering each time. | Production-ready transformers for ranking, lagging, returns, and rolling stats that respect time & group boundaries. | Swap Pandas ↔ Polars with a one-liner, leverage JAX/TF/PyTorch back-ends, and squeeze every millisecond out of your pipeline. | Build and improve upon architectures like bottleneck autoencoders and self-improving neural networks with the same scikit-learn-style API. |
+
+## Key Features
+<div class="grid cards" markdown>
+
+-   :material-swap-vertical: **Feature Transformers**
+    
+    Time-series and cross-sectional transforms that are dataframe-agnostic (Pandas/Polars) and pipeline-ready.
+    
+    [User Guide](user-guide/feature-transformers.md) · [API](api-reference/feature_transformers.md)
+
+-   :material-ruler: **Model Estimators**
+    
+    Keras 3 estimators with scikit-learn API (MLP, BottleneckEncoder, LSTM, and more) + custom losses.
+    
+    [User Guide](user-guide/model-estimators.md) · [Losses](api-reference/losses.md) · [API](api-reference/model_estimators.md)
+
+-   :material-brain: **Meta‑Learning**
+    
+    DSPyMator (LLM-as-estimator) and KerasCortex (LLM-guided architecture search).
+    
+    [DSPyMator](user-guide/dspymator.md) · [KerasCortex](user-guide/keras-cortex.md)
+
+-   :material-tune: **Advanced Pipelines**
+    
+    Compose transformers and estimators with metadata routing, CV, and hyperparameter tuning.
+    
+    [User Guide](user-guide/advanced-pipelines.md)
+
+</div>
+
+!!! tip "Quick install with optional extras"
+    - All features (Keras + DSPy + UMAP): `uv add "centimators[all]"`
 
 ## Basic Usage
 

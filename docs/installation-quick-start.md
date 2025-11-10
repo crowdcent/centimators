@@ -1,28 +1,28 @@
 # Installation & Quick Start
 
 ## Installation
-=== "Minimal (transformers only)"
+=== "Minimal"
 
     ```bash
     uv add centimators
     ```
 
-=== "With Keras [keras-jax]"
+=== "With keras/jax [keras-jax]"
 
     ```bash
-    uv add 'centimators[keras-jax]'
+    uv add "centimators[keras-jax]"
     ```
 
 === "With DSPy [dspy]"
 
     ```bash
-    uv add 'centimators[dspy]'
+    uv add "centimators[dspy]"
     ```
 
 === "Everything [all]"
 
     ```bash
-    uv add 'centimators[all]'
+    uv add "centimators[all]"
     ```
 
 ## Quick Start

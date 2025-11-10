@@ -1,8 +1,5 @@
 """
-DSPy-based estimators.
-
-Contains:
-    - DSPyMator: sklearn-style classifier wrapping DSPy ChainOfThought.
+DSPyMator: A scikit-learn compatible wrapper for DSPy modules.
 """
 
 from dataclasses import dataclass
@@ -16,10 +13,12 @@ import narwhals as nw
 import numpy
 import dspy
 
+from centimators.narwhals_utils import _ensure_numpy
+
 
 @dataclass(kw_only=True)
 class DSPyMator(TransformerMixin, BaseEstimator):
-    """Scikit-learn compatible wrapper for DSPy modules.
+    """DSPyMator is a scikit-learn compatible wrapper for DSPy modules.
 
     Integrates DSPy programs (e.g., ChainOfThought, Predict) into the centimators
     ecosystem, enabling LLM-based predictions that work seamlessly with sklearn
@@ -41,9 +40,11 @@ class DSPyMator(TransformerMixin, BaseEstimator):
         requests, rather than for fine-tuning of local models' weights.
 
     Output Methods:
-        - `predict(X)`: Returns target predictions as numpy arrays. For a single
-          target field, returns a 1D array (n_samples,). For multiple targets,
-          returns a 2D array (n_samples, n_targets).
+        - `predict(X)`: Returns target predictions in the same format as input.
+          If input is numpy array, returns numpy array. If input is dataframe,
+          returns dataframe with target column(s). For single targets, returns
+          1D array or single-column dataframe. For multiple targets, returns
+          2D array or multi-column dataframe.
         - `transform(X)`: Returns all output fields from the DSPy program
           (including reasoning, intermediate steps, etc.) as a dataframe in the
           same backend as the input. Use this to access full program outputs.
@@ -150,10 +151,10 @@ class DSPyMator(TransformerMixin, BaseEstimator):
 
         # Fit and predict (get only target predictions)
         estimator.fit(X_train, y_train)  # y_train can be None
-        predictions = estimator.predict(X_test)  # numpy array
+        predictions = estimator.predict(X_test)  # returns same type as X_test
 
         # Get all outputs (including reasoning and other intermediate steps of the program)
-        full_outputs = estimator.transform(X_test)  # dataframe
+        full_outputs = estimator.transform(X_test)  # always returns dataframe
 
         # With optimization:
         import dspy
@@ -264,8 +265,12 @@ class DSPyMator(TransformerMixin, BaseEstimator):
         if optimizer is not None:
             # Handle validation_data parameter
             if isinstance(validation_data, float):
+                # Convert to numpy for sklearn compatibility
                 X_train, X_val, y_train, y_val = train_test_split(
-                    X, y, test_size=validation_data, random_state=42
+                    _ensure_numpy(X),
+                    _ensure_numpy(y, allow_series=True),
+                    test_size=validation_data,
+                    random_state=42,
                 )
             elif validation_data is None:
                 # No validation set (for optimizers that only need trainset)
@@ -324,19 +329,21 @@ class DSPyMator(TransformerMixin, BaseEstimator):
             return None
 
         examples = []
-        
+
         # Build input kwargs for each row
         if isinstance(X, numpy.ndarray):
             input_kwargs_list = [
-                {inp: val for inp, val in zip(self.input_fields_, row)}
-                for row in X
+                {inp: val for inp, val in zip(self.input_fields_, row)} for row in X
             ]
         else:
             input_kwargs_list = [
-                {inp: row[col] for inp, col in zip(self.input_fields_, self.feature_names)}
+                {
+                    inp: row[col]
+                    for inp, col in zip(self.input_fields_, self.feature_names)
+                }
                 for row in X.iter_rows(named=True)
             ]
-        
+
         # Add targets and create examples
         for kwargs, label in zip(input_kwargs_list, y):
             for i, target_name in enumerate(self._target_names):
@@ -410,7 +417,7 @@ class DSPyMator(TransformerMixin, BaseEstimator):
                 return self._predict_raw_sync(X)
 
             try:
-                loop = asyncio.get_running_loop()
+                asyncio.get_running_loop()
                 # Already in an event loop, use nest_asyncio to enable nested loops
                 try:
                     import nest_asyncio
@@ -428,6 +435,7 @@ class DSPyMator(TransformerMixin, BaseEstimator):
                 # No event loop, safe to use asyncio.run
                 return asyncio.run(self._predict_raw_async(X))
 
+    @nw.narwhalify
     def predict(self, X):
         if not hasattr(self, "_is_fitted"):
             raise ValueError("Classifier not fitted. Call fit() first.")
@@ -436,13 +444,34 @@ class DSPyMator(TransformerMixin, BaseEstimator):
 
         if not preds:
             if len(fields) == 1:
-                return numpy.array([], dtype=object)
-            return numpy.empty((0, len(fields)), dtype=object)
+                empty = numpy.array([], dtype=object)
+            else:
+                empty = numpy.empty((0, len(fields)), dtype=object)
+
+            # Return numpy for numpy input, dataframe for dataframe input
+            if isinstance(X, numpy.ndarray):
+                return empty
+            col_names = fields if len(fields) > 1 else [fields[0]]
+            return nw.from_dict(
+                {name: [] for name in col_names}, backend=nw.get_native_namespace(X)
+            )
 
         labels = numpy.array(
             [[getattr(pred, field) for field in fields] for pred in preds]
         )
-        return labels.squeeze(axis=1) if len(fields) == 1 else labels
+        predictions = labels.squeeze(axis=1) if len(fields) == 1 else labels
+
+        # Return numpy for numpy input, dataframe for dataframe input
+        if isinstance(X, numpy.ndarray):
+            return predictions
+
+        if len(fields) == 1:
+            return nw.from_dict(
+                {fields[0]: predictions}, backend=nw.get_native_namespace(X)
+            )
+        else:
+            cols = {fields[i]: predictions[:, i] for i in range(len(fields))}
+            return nw.from_dict(cols, backend=nw.get_native_namespace(X))
 
     def _get_output_fields(self):
         """Get all output fields for transform."""
@@ -466,8 +495,7 @@ class DSPyMator(TransformerMixin, BaseEstimator):
         }
 
         # Create a dataframe in the same backend as input X
-        native_namespace = nw.get_native_namespace(X)
-        return nw.from_dict(data, native_namespace=native_namespace)
+        return nw.from_dict(data, backend=nw.get_native_namespace(X))
 
     def fit_transform(self, X, y=None, **kwargs):
         return self.fit(X, y).transform(X, y, **kwargs)

@@ -1,5 +1,11 @@
 # KerasCortex
 
+!!! note "Requires keras, jax, and DSPy"
+    This estimator requires the `dspy` optional dependency. Install with:
+    ```bash
+    uv add centimators[all]
+    ```
+
 !!! Warning
     This module is a work in progress. It is not yet ready for production use.
     This is highly experimental and likely to overfit.

@@ -15,6 +15,8 @@ from centimators.feature_transformers import (  # noqa: E402
     MovingAverageTransformer,
     LogReturnTransformer,
     GroupStatsTransformer,
+    EmbeddingTransformer,
+    DimReducer,
 )
 
 from centimators.config import set_keras_backend, get_keras_backend  # noqa: E402
@@ -34,6 +36,8 @@ __all__ = [
     "MovingAverageTransformer",
     "LogReturnTransformer",
     "GroupStatsTransformer",
+    "EmbeddingTransformer",
+    "DimReducer",
     # Config helpers
     "set_keras_backend",
     "get_keras_backend",
@@ -41,11 +45,11 @@ __all__ = [
 
 _LAZY_IMPORTS = {
     # Keras estimators
-    "BaseKerasEstimator": "centimators.model_estimators.keras_estimators",
-    "SequenceEstimator": "centimators.model_estimators.keras_estimators",
-    "MLPRegressor": "centimators.model_estimators.keras_estimators",
-    "BottleneckEncoder": "centimators.model_estimators.keras_estimators",
-    "LSTMRegressor": "centimators.model_estimators.keras_estimators",
+    "BaseKerasEstimator": "centimators.model_estimators.keras_estimators.base",
+    "SequenceEstimator": "centimators.model_estimators.keras_estimators.sequence",
+    "MLPRegressor": "centimators.model_estimators.keras_estimators.dense",
+    "BottleneckEncoder": "centimators.model_estimators.keras_estimators.autoencoder",
+    "LSTMRegressor": "centimators.model_estimators.keras_estimators.sequence",
     # DSPy estimator
     "DSPyMator": "centimators.model_estimators.dspymator",
     # Meta-estimator

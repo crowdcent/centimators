@@ -12,6 +12,7 @@ Documentation is available at [https://crowdcent.github.io/centimators/](https:/
 
 ```bash
 # Feature transformers only (minimal)
+uv pip install centimators # or
 uv add centimators
 
 # With Keras neural networks (JAX backend)
@@ -65,10 +66,7 @@ from centimators.model_estimators import MLPRegressor
 
 **Note:** If you choose TensorFlow or PyTorch, you'll need to install them separately:
 ```bash
-# For TensorFlow
 uv add tensorflow
-
-# For PyTorch
 uv add torch
 ```
 
