@@ -150,7 +150,7 @@ class DimReducer(_BaseFeatureTransformer):
         output_cols = {f"dim_{i}": X_reduced[:, i] for i in range(self.n_components)}
 
         # Return as narwhals DataFrame with the same backend as input
-        return nw.from_dict(output_cols, native_namespace=nw.get_native_namespace(X))
+        return nw.from_dict(output_cols, backend=nw.get_native_namespace(X))
 
     def get_feature_names_out(self, input_features=None) -> list[str]:
         """Return the output feature names.
