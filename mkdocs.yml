@@ -114,7 +114,10 @@ plugins:
             members_order: source
             heading_level: 2
   - markdown-exec
-  - mkdocs-jupyter
+  - mkdocs-jupyter:
+      remove_tag_config:
+        remove_all_outputs_tags:
+          - "hide-output"
 
 extra_javascript:
     - "overrides/assets/js/runllm-widget.js"
