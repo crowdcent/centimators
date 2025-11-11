@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 from typing import Any
 
+import narwhals as nw
 from narwhals.typing import IntoFrame
 from sklearn.base import RegressorMixin
 
@@ -60,9 +61,33 @@ class SequenceEstimator(BaseKerasEstimator):
         )
         return self
 
-    def predict(self, X, **kwargs: Any) -> numpy.ndarray:
+    @nw.narwhalify
+    def predict(self, X, batch_size: int = 512, **kwargs: Any) -> Any:
+        if not self.model:
+            raise ValueError("Model not built. Call `build_model` first.")
+
+        # Store original X for backend detection before reshaping
+        X_original = X
         X_reshaped, _ = self._reshape(X)
-        return super().predict(X_reshaped, **kwargs)
+
+        predictions = self.model.predict(
+            _ensure_numpy(X_reshaped), batch_size=batch_size, **kwargs
+        )
+
+        # Use X_original (not X_reshaped) for backend detection
+        if isinstance(X_original, numpy.ndarray):
+            return predictions
+
+        if predictions.ndim == 1:
+            return nw.from_dict(
+                {"prediction": predictions}, backend=nw.get_native_namespace(X_original)
+            )
+        else:
+            cols = {
+                f"prediction_{i}": predictions[:, i]
+                for i in range(predictions.shape[1])
+            }
+            return nw.from_dict(cols, backend=nw.get_native_namespace(X_original))
 
 
 @dataclass(kw_only=True)
