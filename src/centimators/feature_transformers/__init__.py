@@ -34,8 +34,6 @@ Highlights:
 from .ranking import RankTransformer
 from .time_series import LagTransformer, MovingAverageTransformer, LogReturnTransformer
 from .stats import GroupStatsTransformer
-from .embedding import EmbeddingTransformer
-from .dimreduction import DimReducer
 
 __all__ = [
     "RankTransformer",
@@ -43,6 +41,4 @@ __all__ = [
     "MovingAverageTransformer",
     "LogReturnTransformer",
     "GroupStatsTransformer",
-    "EmbeddingTransformer",
-    "DimReducer",
 ]

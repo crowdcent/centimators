@@ -15,8 +15,6 @@ from centimators.feature_transformers import (  # noqa: E402
     MovingAverageTransformer,
     LogReturnTransformer,
     GroupStatsTransformer,
-    EmbeddingTransformer,
-    DimReducer,
 )
 
 from centimators.config import set_keras_backend, get_keras_backend  # noqa: E402
@@ -54,6 +52,9 @@ _LAZY_IMPORTS = {
     "DSPyMator": "centimators.model_estimators.dspymator",
     # Meta-estimator
     "KerasCortex": "centimators.model_estimators.keras_cortex",
+    # Feature transformers with optional dependencies
+    "EmbeddingTransformer": "centimators.feature_transformers.embedding",
+    "DimReducer": "centimators.feature_transformers.dimreduction",
 }
 
 
