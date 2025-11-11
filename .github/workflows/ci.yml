@@ -16,11 +16,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install uv
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
-      - name: Install dependencies
-        run: uv pip install -e .[all] pytest pytest-cov --system
+        uses: astral-sh/setup-uv@v4
       - name: Run tests with coverage
-        run: uv run pytest --cov=centimators --cov-report=term --cov-fail-under=80
+        run: uv run --all-extras pytest --cov=centimators --cov-report=term --cov-fail-under=80
 
   lint:
     runs-on: ubuntu-latest
