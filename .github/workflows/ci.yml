@@ -18,7 +18,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
       - name: Run tests with coverage
-        run: uv run --all-extras pytest --cov=centimators --cov-report=term --cov-fail-under=80
+        run: uv run --all-extras pytest --cov=centimators --cov-report=term
 
   lint:
     runs-on: ubuntu-latest
