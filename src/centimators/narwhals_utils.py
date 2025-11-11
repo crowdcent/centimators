@@ -1,7 +1,33 @@
+"""Narwhals utilities for centimators.
+
+This module contains utilities for working with narwhals data structures:
+- Data conversion utilities (DataFrame/Series -> numpy)
+- Horizontal (row-wise) statistical operations using narwhals expressions
+"""
+
 import narwhals as nw
+import numpy
 
 
-# Helper functions for horizontal statistics using narwhals expressions
+def _ensure_numpy(data, allow_series: bool = False):
+    """Convert data to numpy array, handling both numpy arrays and dataframes.
+
+    Args:
+        data: Input data (numpy array, dataframe, or series)
+        allow_series: Whether to allow series inputs
+
+    Returns:
+        numpy.ndarray: Data converted to numpy array
+    """
+    if isinstance(data, numpy.ndarray):
+        return data
+    try:
+        return nw.from_native(data, allow_series=allow_series).to_numpy()
+    except Exception:
+        return numpy.asarray(data)
+
+
+# Horizontal statistics using narwhals expressions
 def var_horizontal(*exprs: nw.Expr, ddof: int = 1) -> nw.Expr:
     """Computes the variance horizontally (row-wise) across a set of expressions.
 

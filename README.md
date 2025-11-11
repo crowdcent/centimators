@@ -10,19 +10,26 @@ Documentation is available at [https://crowdcent.github.io/centimators/](https:/
 
 ## Installation
 
-Recommended (using uv):
 ```bash
+# Feature transformers only (minimal)
+uv pip install centimators # or
 uv add centimators
-```
 
-Or, using pip:
-```bash
-pip install centimators
+# With Keras neural networks (JAX backend)
+uv add 'centimators[keras-jax]'
+
+# With DSPy LLM estimators
+uv add 'centimators[dspy]'
+
+# Everything
+uv add 'centimators[all]'
 ```
 
 ## Keras Backend Configuration
 
-`centimators` uses Keras 3 for its neural network models, which supports multiple backends (JAX, TensorFlow, PyTorch). By default, `centimators` uses **JAX** as the backend and automatically installs `jax` as a dependency.
+**Note:** Only relevant if using `centimators[keras-jax]` or `centimators[all]`.
+
+`centimators` uses Keras 3 for its neural network models, which supports multiple backends (JAX, TensorFlow, PyTorch). By default, `centimators` uses **JAX** as the backend.
 
 ### Using the Default JAX Backend
 
@@ -59,10 +66,7 @@ from centimators.model_estimators import MLPRegressor
 
 **Note:** If you choose TensorFlow or PyTorch, you'll need to install them separately:
 ```bash
-# For TensorFlow
 uv add tensorflow
-
-# For PyTorch
 uv add torch
 ```
 

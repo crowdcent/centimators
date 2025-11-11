@@ -11,15 +11,20 @@ nav:
       - User Guide:
           - Feature Transformers: user-guide/feature-transformers.md
           - Model Estimators: user-guide/model-estimators.md
-          - Keras Cortex: user-guide/keras-cortex.md
+          - Meta-Learning Estimators:
+              - DSPyMator: user-guide/dspymator.md
+              - KerasCortex: user-guide/keras-cortex.md
           - Advanced Pipelines: user-guide/advanced-pipelines.md
   - Tutorials:
       - Keras Cortex: tutorials/keras-cortex.ipynb
+      - DSPyMator: tutorials/dspymator.ipynb
   - API Reference:
       - Feature Transformers: api-reference/feature_transformers.md
       - Model Estimators: api-reference/model_estimators.md
-      - Keras Cortex: api-reference/keras_cortex.md
       - Losses: api-reference/losses.md
+      - Meta-Learning Estimators:
+          - DSPyMator: api-reference/dspymator.md
+          - KerasCortex: api-reference/keras_cortex.md
 theme:
   name: material
   custom_dir: docs/overrides
@@ -109,8 +114,10 @@ plugins:
             members_order: source
             heading_level: 2
   - markdown-exec
-  - mkdocs-jupyter
-
+  - mkdocs-jupyter:
+      remove_tag_config:
+        remove_all_outputs_tags:
+          - "hide-output"
 
 extra_javascript:
     - "overrides/assets/js/runllm-widget.js"

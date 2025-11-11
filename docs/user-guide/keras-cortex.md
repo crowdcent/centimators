@@ -1,10 +1,16 @@
 # KerasCortex
 
+!!! note "Requires keras, jax, and DSPy"
+    This estimator requires the `dspy` optional dependency. Install with:
+    ```bash
+    uv add centimators[all]
+    ```
+
 !!! Warning
     This module is a work in progress. It is not yet ready for production use.
     This is highly experimental and likely to overfit.
 
-`centimators.keras_cortex.KerasCortex` introduces a novel approach to model development by automating aspects of architecture search. It wraps a Keras-based estimator and leverages a Large Language Model (LLM) to recursively self-reflect on its own architecture. The LLM suggests improvements to the model's source code, which are then tested. This iterative process allows `KerasCortex` to refine its internal model over several cycles, potentially discovering more optimal architectures for the given data.
+`centimators.model_estimators.KerasCortex` introduces a novel approach to model development by automating aspects of architecture search. It wraps a Keras-based estimator and leverages a Large Language Model (LLM) to recursively self-reflect on its own architecture. The LLM suggests improvements to the model's source code, which are then tested. This iterative process allows `KerasCortex` to refine its internal model over several cycles, potentially discovering more optimal architectures for the given data.
 
 ## How It Works
 

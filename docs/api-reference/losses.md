@@ -1,5 +1,3 @@
-# Losses
-
-::: centimators.losses.SpearmanCorrelation
-
-::: centimators.losses.CombinedLoss 
+::: centimators.losses
+    options:
+      show_symbol_type_toc: true

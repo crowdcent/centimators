@@ -17,17 +17,18 @@ import keras.ops as K
 from keras.losses import Loss
 from keras.config import epsilon
 
+
 class SpearmanCorrelation(Loss):
     """Differentiable Spearman rank correlation loss.
-    
+
     This loss function computes a soft approximation of Spearman's rank
     correlation coefficient between predictions and targets. Unlike the
     standard non-differentiable rank correlation, this implementation uses
     sigmoid-based soft rankings that allow gradient flow during backpropagation.
-    
+
     The loss is computed as the negative correlation (to minimize during training)
     between the soft ranks of predictions and targets.
-    
+
     Args:
         regularization_strength (float, default=1e-3): Temperature parameter for
             the sigmoid function used in soft ranking. Smaller values create
@@ -35,14 +36,14 @@ class SpearmanCorrelation(Loss):
             approximations. Typically ranges from 1e-4 to 1e-1.
         name (str, default="spearman_correlation"): Name of the loss function.
         **kwargs: Additional keyword arguments passed to the base Loss class.
-    
+
     Examples:
         >>> import keras
         >>> loss_fn = SpearmanCorrelation(regularization_strength=0.01)
         >>> model = keras.Sequential([...])
         >>> model.compile(optimizer='adam', loss=loss_fn)
     """
-    
+
     def __init__(
         self, regularization_strength=1e-3, name="spearman_correlation", **kwargs
     ):
@@ -51,11 +52,11 @@ class SpearmanCorrelation(Loss):
 
     def call(self, y_true, y_pred):
         """Compute the Spearman correlation loss.
-        
+
         Args:
             y_true: Ground truth values of shape (batch_size,) or (batch_size, 1).
             y_pred: Predicted values of shape (batch_size,) or (batch_size, 1).
-            
+
         Returns:
             Scalar loss value (negative correlation).
         """
@@ -72,10 +73,10 @@ class SpearmanCorrelation(Loss):
 
     def _soft_rank(self, x):
         """Compute differentiable soft ranks using sigmoid approximation.
-        
+
         Args:
             x: Input tensor of shape (batch_size, 1).
-            
+
         Returns:
             Soft ranks tensor of shape (batch_size, 1).
         """
@@ -93,11 +94,11 @@ class SpearmanCorrelation(Loss):
 
     def _correlation(self, x, y):
         """Compute Pearson correlation between two tensors.
-        
+
         Args:
             x: First tensor of shape (batch_size, 1).
             y: Second tensor of shape (batch_size, 1).
-            
+
         Returns:
             Scalar correlation value in range [-1, 1].
         """
@@ -116,12 +117,12 @@ class SpearmanCorrelation(Loss):
 
 class CombinedLoss(Loss):
     """Weighted combination of MSE and Spearman correlation losses.
-    
+
     This loss function combines mean squared error (for absolute accuracy)
     with Spearman correlation loss (for rank preservation). This can be
     particularly useful when both the exact values and their relative
     ordering are important.
-    
+
     Args:
         mse_weight (float, default=2.0): Weight applied to the MSE component.
             Higher values prioritize absolute accuracy.
@@ -131,13 +132,13 @@ class CombinedLoss(Loss):
             passed to the SpearmanCorrelation loss.
         name (str, default="combined_loss"): Name of the loss function.
         **kwargs: Additional keyword arguments passed to the base Loss class.
-        
+
     Examples:
         >>> # Prioritize ranking accuracy over absolute values
         >>> loss_fn = CombinedLoss(mse_weight=0.5, spearman_weight=2.0)
         >>> model.compile(optimizer='adam', loss=loss_fn)
     """
-    
+
     def __init__(
         self,
         mse_weight=2.0,
@@ -155,11 +156,11 @@ class CombinedLoss(Loss):
 
     def call(self, y_true, y_pred):
         """Compute the combined loss.
-        
+
         Args:
             y_true: Ground truth values of shape (batch_size,) or (batch_size, 1).
             y_pred: Predicted values of shape (batch_size,) or (batch_size, 1).
-            
+
         Returns:
             Scalar loss value (weighted sum of MSE and negative Spearman correlation).
         """

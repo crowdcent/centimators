@@ -283,7 +283,10 @@ def _():
 @app.cell
 def _(MLPRegressor, lagged_ranker, make_pipeline):
     from sklearn.impute import SimpleImputer
-    imputer = SimpleImputer(strategy="constant", fill_value=0.5).set_output(transform="pandas")
+
+    imputer = SimpleImputer(strategy="constant", fill_value=0.5).set_output(
+        transform="pandas"
+    )
     mlp_regressor = MLPRegressor().set_fit_request(epochs=True)
 
     mlp_pipeline = make_pipeline(lagged_ranker, imputer, mlp_regressor)
@@ -297,7 +300,7 @@ def _(df_polars, feature_names, mlp_pipeline):
         df_polars["close"],
         date_series=df_polars["date"],
         ticker_series=df_polars["ticker"],
-        epochs=5
+        epochs=5,
     )
     return
 

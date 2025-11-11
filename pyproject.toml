@@ -1,26 +1,40 @@
 [project]
 name = "centimators"
-version = "0.1.11"
+version = "0.2.0"
 description = "essential data transformers and model estimators for ML and data science competitions"
 readme = "README.md"
 authors = [
     { name = "jrosenfeld13", email = "jason@crowdcent.com" }
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
-    "keras>=3.9.2",
-    "narwhals>=1.39.0",
     "scikit-learn>=1.6.1",
-    "jax>=0.6.0",
+    "narwhals>=1.39.0",
+]
+
+[project.optional-dependencies]
+keras-jax = [
+    "keras>=3.9.2",
+    "jax>=0.6.31",
+    "jaxlib>=0.4.31",
+]
+dspy = [
     "dspy>=2.6.24",
+]
+all = [
+    "keras>=3.9.2",
+    "jax>=0.6.31",
+    "jaxlib>=0.4.31",
+    "dspy>=2.6.24",
+    "umap-learn>=0.5.9.post2",
 ]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "altair>=5.5.0",
     "jupyter>=1.1.1",
     "marimo>=0.13.7",
@@ -33,9 +47,12 @@ dev-dependencies = [
     "numpy>=2.2.5",
     "pandas>=2.2.3",
     "polars>=1.29.0",
+    "pre-commit>=4.0.0",
     "pyarrow>=20.0.0",
     "pytest>=8.4.0",
+    "pytest-cov>=6.0.0",
     "ruff>=0.11.9",
+    "ty>=0.0.1a25",
     "watchdog>=6.0.0",
 ]
 
@@ -43,3 +60,4 @@ dev-dependencies = [
 exclude = [
   "/docs/**"
 ]
+
