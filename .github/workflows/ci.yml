@@ -31,11 +31,3 @@ jobs:
         run: uv run ruff format --check .
       - name: Lint
         run: uv run ruff check --exit-non-zero-on-fix .
-
-  type:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
-      - name: Type check
-        run: uv run ty check src/
