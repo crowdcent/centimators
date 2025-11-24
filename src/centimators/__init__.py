@@ -15,6 +15,7 @@ from centimators.feature_transformers import (  # noqa: E402
     MovingAverageTransformer,
     LogReturnTransformer,
     GroupStatsTransformer,
+    FeatureNeutralizer,
 )
 
 from centimators.config import set_keras_backend, get_keras_backend  # noqa: E402
@@ -36,6 +37,7 @@ __all__ = [
     "GroupStatsTransformer",
     "EmbeddingTransformer",
     "DimReducer",
+    "FeatureNeutralizer",
     # Config helpers
     "set_keras_backend",
     "get_keras_backend",

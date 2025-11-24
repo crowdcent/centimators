@@ -29,11 +29,14 @@ Highlights:
     Embedder, supporting both hosted models and custom embedding functions.
     * **DimReducer** – reduces feature dimensionality using PCA, t-SNE, or UMAP
     for feature compression and visualization.
+    * **FeatureNeutralizer** – neutralizes predictions by removing linear exposure
+    to features, reducing feature correlation while preserving signal.
 """
 
 from .ranking import RankTransformer
 from .time_series import LagTransformer, MovingAverageTransformer, LogReturnTransformer
 from .stats import GroupStatsTransformer
+from .neutralization import FeatureNeutralizer
 
 __all__ = [
     "RankTransformer",
@@ -41,4 +44,5 @@ __all__ = [
     "MovingAverageTransformer",
     "LogReturnTransformer",
     "GroupStatsTransformer",
+    "FeatureNeutralizer",
 ]
