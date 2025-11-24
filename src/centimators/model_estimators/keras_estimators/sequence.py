@@ -6,20 +6,10 @@ from typing import Any
 import narwhals as nw
 from narwhals.typing import IntoFrame
 from sklearn.base import RegressorMixin
-
-try:
-    from keras import ops, layers, models
-except ImportError as e:
-    raise ImportError(
-        "Keras estimators require keras and jax (or another Keras-compatible backend). Install with:\n"
-        "  uv add 'centimators[keras-jax]'\n"
-        "or:\n"
-        "  pip install 'centimators[keras-jax]'"
-    ) from e
-
 import numpy
 
 from .base import BaseKerasEstimator, _ensure_numpy
+from keras import ops, layers, models
 
 
 @dataclass(kw_only=True)

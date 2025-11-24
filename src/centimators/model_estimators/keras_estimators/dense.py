@@ -4,17 +4,8 @@ from dataclasses import dataclass, field
 
 from sklearn.base import RegressorMixin
 
-try:
-    from keras import layers, models
-except ImportError as e:
-    raise ImportError(
-        "Keras estimators require keras and jax (or another Keras-compatible backend). Install with:\n"
-        "  uv add 'centimators[keras-jax]'\n"
-        "or:\n"
-        "  pip install 'centimators[keras-jax]'"
-    ) from e
-
 from .base import BaseKerasEstimator
+from keras import layers, models
 
 
 @dataclass(kw_only=True)

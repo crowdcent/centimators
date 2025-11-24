@@ -12,6 +12,7 @@ from centimators.model_estimators import (
     MLPRegressor,
     LSTMRegressor,
     BottleneckEncoder,
+    NeuralDecisionForestRegressor,
 )
 
 
@@ -343,3 +344,92 @@ def test_base_keras_estimator_validation_data_bug():
         pytest.fail(
             f"BaseKerasEstimator failed to handle DataFrame validation data: {e}"
         )
+
+
+@pytest.mark.parametrize(
+    "n_samples,n_features,num_trees,depth",
+    [
+        (20, 4, 3, 3),
+        (30, 6, 5, 4),
+    ],
+)
+def test_neural_decision_forest_fit_predict(n_samples, n_features, num_trees, depth):
+    """NeuralDecisionForestRegressor should fit and return predictions with correct shape."""
+    rng = np.random.default_rng(42)
+    X = rng.standard_normal((n_samples, n_features)).astype("float32")
+    y = rng.standard_normal((n_samples, 1)).astype("float32")
+
+    est = NeuralDecisionForestRegressor(
+        num_trees=num_trees,
+        depth=depth,
+        used_features_rate=0.7,
+        output_units=1,
+        learning_rate=1e-3,
+    )
+
+    # Train for a single epoch to keep the test fast
+    est.fit(X, y, epochs=1, batch_size=4, verbose=0)
+
+    preds = est.predict(X, batch_size=4, verbose=0)
+
+    # Shape checks
+    assert preds.shape == (n_samples, 1)
+
+    # The estimator should report itself as fitted for sklearn utilities
+    assert est.__sklearn_is_fitted__() is True
+
+
+def test_neural_decision_forest_with_dataframes():
+    """NeuralDecisionForestRegressor should handle pandas and polars inputs."""
+    import pandas as pd
+    import polars as pl
+
+    rng = np.random.default_rng(42)
+    n_samples, n_features = 20, 5
+
+    # Create data in different formats
+    X_numpy = rng.standard_normal((n_samples, n_features)).astype("float32")
+    y_numpy = rng.standard_normal((n_samples,)).astype("float32")
+
+    X_pandas = pd.DataFrame(X_numpy, columns=[f"feat_{i}" for i in range(n_features)])
+    y_pandas = pd.Series(y_numpy, name="target")
+
+    X_polars = pl.DataFrame(X_numpy, schema=[f"feat_{i}" for i in range(n_features)])
+    y_polars = pl.Series("target", y_numpy)
+
+    # Test with each input type
+    for X, y, input_type in [
+        (X_numpy, y_numpy, "numpy"),
+        (X_pandas, y_pandas, "pandas"),
+        (X_polars, y_polars, "polars"),
+    ]:
+        est = NeuralDecisionForestRegressor(
+            num_trees=3, depth=3, used_features_rate=0.8, output_units=1
+        )
+
+        # Fit should work with all types
+        est.fit(X, y, epochs=1, batch_size=4, verbose=0)
+
+        # Predict should also work with all types
+        preds = est.predict(X, batch_size=4, verbose=0)
+        assert preds.shape == (n_samples, 1), f"Failed for {input_type} input"
+
+
+def test_neural_decision_forest_single_tree():
+    """Test NeuralDecisionForestRegressor with a single tree."""
+    rng = np.random.default_rng(123)
+    n_samples, n_features = 15, 4
+
+    X = rng.standard_normal((n_samples, n_features)).astype("float32")
+    y = rng.standard_normal((n_samples, 1)).astype("float32")
+
+    # Single tree should work without issues
+    est = NeuralDecisionForestRegressor(
+        num_trees=1, depth=3, used_features_rate=1.0, output_units=1
+    )
+
+    est.fit(X, y, epochs=1, batch_size=4, verbose=0)
+    preds = est.predict(X, batch_size=4, verbose=0)
+
+    assert preds.shape == (n_samples, 1)
+    assert est.__sklearn_is_fitted__() is True
