@@ -12,7 +12,7 @@ import numpy as np
 from sklearn.base import RegressorMixin
 
 from .base import BaseKerasEstimator
-from keras import layers, models, ops as K
+from keras import layers, models, ops as K, regularizers
 
 
 class NeuralDecisionTree(models.Model):
@@ -52,7 +52,9 @@ class NeuralDecisionTree(models.Model):
     are computed and multiplied to give the final probability of reaching each leaf.
     """
 
-    def __init__(self, depth, num_features, used_features_rate, output_units=1):
+    def __init__(
+        self, depth, num_features, used_features_rate, output_units=1, l2_reg=0.01
+    ):
         super().__init__()
         self.depth = depth
         self.num_leaves = 2**depth
@@ -68,17 +70,21 @@ class NeuralDecisionTree(models.Model):
             one_hot[sampled_feature_indices], dtype="float32"
         )
 
-        # Initialize the weights of the outputs in leaves
+        # Initialize the weights of the outputs in leaves with L2 regularization
         self.pi = self.add_weight(
             initializer="random_normal",
             shape=[self.num_leaves, self.output_units],
             dtype="float32",
             trainable=True,
+            regularizer=regularizers.l2(l2_reg) if l2_reg > 0 else None,
         )
 
-        # Initialize the stochastic routing layer
+        # Initialize the stochastic routing layer with L2 regularization
         self.decision_fn = layers.Dense(
-            units=self.num_leaves, activation="sigmoid", name="decision"
+            units=self.num_leaves,
+            activation="sigmoid",
+            name="decision",
+            kernel_regularizer=regularizers.l2(l2_reg) if l2_reg > 0 else None,
         )
 
     def call(self, features):
@@ -143,6 +149,9 @@ class NeuralDecisionForestRegressor(RegressorMixin, BaseKerasEstimator):
     used_features_rate : float, default=0.5
         Fraction of features each tree randomly selects (0 to 1).
         Provides feature bagging. Lower values increase diversity.
+    l2_reg : float, default=0.01
+        L2 regularization strength for leaf weights and routing layers.
+        Higher values reduce overfitting but may underfit.
     output_units : int, default=1
         Number of output targets to predict.
     optimizer : Type[keras.optimizers.Optimizer], default=Adam
@@ -187,6 +196,7 @@ class NeuralDecisionForestRegressor(RegressorMixin, BaseKerasEstimator):
     num_trees: int = 10
     depth: int = 5
     used_features_rate: float = 0.5
+    l2_reg: float = 0.01
     metrics: list[str] | None = field(default_factory=lambda: ["mse"])
 
     def build_model(self):
@@ -217,6 +227,7 @@ class NeuralDecisionForestRegressor(RegressorMixin, BaseKerasEstimator):
                     num_features=self._n_features_in_,
                     used_features_rate=self.used_features_rate,
                     output_units=self.output_units,
+                    l2_reg=self.l2_reg,
                 )
                 trees.append(tree)
 
