@@ -81,6 +81,77 @@ latent_features = encoder.transform(X)
 print(f"Latent shape: {latent_features.shape}")  # (1000, 256)
 ```
 
+### NeuralDecisionForestRegressor
+
+`centimators.model_estimators.NeuralDecisionForestRegressor` is a differentiable decision forest for tabular regression. It learns soft routing probabilities at each node and aggregates leaf predictions over an ensemble of trees, trained end-to-end with backprop.
+
+- Interpretable tree-like structure with learned splits
+- End-to-end differentiable training
+- Ensemble averaging for stability
+- Controls for routing sharpness, balance, and ensemble diversity
+
+#### Quick start
+
+```python
+import numpy as np
+from centimators.model_estimators import NeuralDecisionForestRegressor
+
+rng = np.random.default_rng(42)
+X = rng.standard_normal((2000, 20)).astype("float32")
+y = (np.sin(2*X[:, 0]) + X[:, 1]**2 + X[:, 2]*X[:, 3]).astype("float32").reshape(-1, 1)
+
+ndf = NeuralDecisionForestRegressor(
+    num_trees=25,
+    depth=4,
+    used_features_rate=0.5,
+    # Routing sharpness (recommended): 0.5
+    temperature=0.5,
+    # Optional diversity/robustness
+    input_noise_std=0.03,   # noise before trunk
+    tree_noise_std=0.05,    # per-tree noise after trunk
+    trunk_units=[32],       # small shared MLP trunk
+    random_state=42,
+)
+
+ndf.fit(X, y, epochs=50, batch_size=64, verbose=0)
+preds = ndf.predict(X)
+```
+
+#### Key parameters
+
+- `num_trees` (int): number of trees in the ensemble (e.g., 25–100)
+- `depth` (int): tree depth; 3–5 are common, deeper is harder to train
+- `used_features_rate` (float): feature bagging rate per tree (0–1); never fewer than 1 feature is used (edge case handled)
+- `temperature` (float): routing sharpness; 0.3–0.5 is sharper, 1.0 is neutral
+- `l2_decision` / `l2_leaf` (float): separate L2 for routing vs leaves (e.g., 1e-4 and 1e-3)
+- `input_noise_std` (float): Gaussian noise before trunk for robustness (try 0.02–0.05)
+- `tree_noise_std` (float): per-tree Gaussian noise after trunk to decorrelate trees (try 0.03–0.10)
+- `tree_dropout_rate` (float): optionally drop tree contributions during training (0–0.3)
+- `trunk_units` (list[int] | None): optional small shared MLP before the trees (e.g., `[32, 32]`)
+- `random_state` (int | None): reproducible feature-bagging masks
+
+#### Optional temperature annealing (advanced)
+
+You can manually anneal temperature if desired:
+
+```python
+from keras.callbacks import Callback
+
+class TemperatureAnnealing(Callback):
+    def __init__(self, ndf, start=2.0, end=0.5, epochs=50):
+        self.ndf, self.start, self.end, self.epochs = ndf, start, end, epochs
+    def on_epoch_end(self, epoch, logs=None):
+        t = self.start - (self.start - self.end) * ((epoch + 1) / self.epochs)
+        for tree in self.ndf.trees:
+            tree.temperature.assign(t)
+```
+
+#### Notes
+
+- Feature-bagging edge case is handled (at least one feature per tree)
+- `random_state` seeds the feature mask sampling
+- A small trunk often improves accuracy by splitting on learned features
+
 ## Sequence Models
 
 These models are designed for sequential/time-series data where temporal dependencies matter.

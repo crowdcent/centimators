@@ -34,6 +34,16 @@ class NeuralDecisionTree(models.Model):
         Provides feature bagging similar to random forests.
     output_units : int, default=1
         Number of output units (targets to predict).
+    l2_decision : float, default=1e-4
+        L2 regularization strength for routing decision layer.
+        Lower values allow sharper routing decisions.
+    l2_leaf : float, default=1e-3
+        L2 regularization strength for leaf output weights.
+    temperature : float, default=0.5
+        Temperature for sigmoid sharpness. Lower = sharper routing (more tree-like),
+        higher = softer routing (more like weighted average of leaves).
+    rng : np.random.Generator | None, default=None
+        Random number generator for reproducible feature mask sampling.
 
     Attributes
     ----------
@@ -44,7 +54,7 @@ class NeuralDecisionTree(models.Model):
     pi : Tensor
         Learned output values for each leaf node, shape (num_leaves, output_units)
     decision_fn : Dense layer
-        Learns routing probabilities for all internal nodes
+        Learns routing logits for all internal nodes
 
     Notes
     -----
@@ -53,17 +63,29 @@ class NeuralDecisionTree(models.Model):
     """
 
     def __init__(
-        self, depth, num_features, used_features_rate, output_units=1, l2_reg=0.01
+        self,
+        depth,
+        num_features,
+        used_features_rate,
+        output_units=1,
+        l2_decision=1e-4,
+        l2_leaf=1e-3,
+        temperature=0.5,
+        rng=None,
     ):
         super().__init__()
         self.depth = depth
         self.num_leaves = 2**depth
         self.output_units = output_units
+        self._init_temperature = temperature
 
         # Create a mask for the randomly selected features
-        num_used_features = int(num_features * used_features_rate)
+        # Fix edge case: ensure at least 1 feature is always selected
+        num_used_features = max(1, int(round(num_features * used_features_rate)))
         one_hot = np.eye(num_features)
-        sampled_feature_indices = np.random.choice(
+        if rng is None:
+            rng = np.random.default_rng()
+        sampled_feature_indices = rng.choice(
             np.arange(num_features), num_used_features, replace=False
         )
         self.used_features_mask = K.convert_to_tensor(
@@ -76,15 +98,27 @@ class NeuralDecisionTree(models.Model):
             shape=[self.num_leaves, self.output_units],
             dtype="float32",
             trainable=True,
-            regularizer=regularizers.l2(l2_reg) if l2_reg > 0 else None,
+            regularizer=regularizers.l2(l2_leaf) if l2_leaf > 0 else None,
         )
 
-        # Initialize the stochastic routing layer with L2 regularization
+        # Temperature for controlling sigmoid sharpness (non-trainable)
+        self.temperature = self.add_weight(
+            name="temperature",
+            shape=(),
+            initializer=lambda shape, dtype: K.convert_to_tensor(
+                temperature, dtype=dtype
+            ),
+            trainable=False,
+        )
+
+        # Initialize the stochastic routing layer (outputs logits, not probabilities)
         self.decision_fn = layers.Dense(
             units=self.num_leaves,
-            activation="sigmoid",
+            activation=None,  # Raw logits - sigmoid applied with temperature in call()
             name="decision",
-            kernel_regularizer=regularizers.l2(l2_reg) if l2_reg > 0 else None,
+            kernel_regularizer=regularizers.l2(l2_decision)
+            if l2_decision > 0
+            else None,
         )
 
     def call(self, features):
@@ -95,10 +129,11 @@ class NeuralDecisionTree(models.Model):
             features, K.transpose(self.used_features_mask)
         )  # [batch_size, num_used_features]
 
-        # Compute the routing probabilities
-        decisions = K.expand_dims(
-            self.decision_fn(features), axis=2
-        )  # [batch_size, num_leaves, 1]
+        # Compute routing logits and apply temperature-scaled sigmoid
+        logits = self.decision_fn(features)  # [batch_size, num_leaves]
+        decisions = K.sigmoid(logits / self.temperature)  # [batch_size, num_leaves]
+
+        decisions = K.expand_dims(decisions, axis=2)  # [batch_size, num_leaves, 1]
 
         # Concatenate the routing probabilities with their complements
         decisions = layers.Concatenate(axis=2)(
@@ -139,19 +174,45 @@ class NeuralDecisionForestRegressor(RegressorMixin, BaseKerasEstimator):
     - Feature bagging via used_features_rate (like random forests)
     - End-to-end differentiable training
     - Ensemble averaging for improved generalization
+    - Temperature-controlled routing sharpness
+    - Input noise, per-tree noise, and tree dropout for ensemble diversity
 
     Parameters
     ----------
-    num_trees : int, default=10
+    num_trees : int, default=25
         Number of decision trees in the forest ensemble.
-    depth : int, default=5
+    depth : int, default=4
         Depth of each tree. Each tree will have 2^depth leaf nodes.
+        Deeper trees have more capacity but harder gradient flow.
     used_features_rate : float, default=0.5
         Fraction of features each tree randomly selects (0 to 1).
         Provides feature bagging. Lower values increase diversity.
-    l2_reg : float, default=0.01
-        L2 regularization strength for leaf weights and routing layers.
-        Higher values reduce overfitting but may underfit.
+    l2_decision : float, default=1e-4
+        L2 regularization for routing decision layers.
+        Lower values allow sharper routing decisions.
+    l2_leaf : float, default=1e-3
+        L2 regularization for leaf output weights.
+        Can be stronger than l2_decision since leaves are regression weights.
+    temperature : float, default=0.5
+        Temperature for sigmoid sharpness in routing. Lower values (0.3-0.5)
+        give sharper, more tree-like routing. Higher values (1-3) give softer
+        routing where samples flow through multiple paths.
+    input_noise_std : float, default=0.0
+        Gaussian noise std applied to inputs before trunk.
+        Makes trunk robust to input perturbations. Try 0.02-0.05.
+    tree_noise_std : float, default=0.0
+        Gaussian noise std applied per-tree after trunk.
+        Each tree sees a different noisy view, decorrelating the ensemble.
+        Try 0.03-0.1.
+    tree_dropout_rate : float, default=0.0
+        Dropout rate for tree outputs during training (0 to 1).
+        Randomly drops tree contributions to decorrelate ensemble.
+    trunk_units : list[int] | None, default=None
+        Hidden layer sizes for optional shared MLP trunk before trees.
+        E.g. [64, 64] adds two Dense+ReLU layers. Trees then split on
+        learned features instead of raw columns.
+    random_state : int | None, default=None
+        Random seed for reproducible feature mask sampling across trees.
     output_units : int, default=1
         Number of output targets to predict.
     optimizer : Type[keras.optimizers.Optimizer], default=Adam
@@ -169,6 +230,8 @@ class NeuralDecisionForestRegressor(RegressorMixin, BaseKerasEstimator):
     ----------
     model : keras.Model
         The compiled Keras model containing the ensemble of trees.
+    trees : list[NeuralDecisionTree]
+        List of tree models in the ensemble.
 
     Examples
     --------
@@ -186,6 +249,7 @@ class NeuralDecisionForestRegressor(RegressorMixin, BaseKerasEstimator):
     - More trees generally improve performance but increase computation
     - Lower used_features_rate increases diversity but may hurt individual tree performance
     - Works well on tabular data where tree-based methods traditionally excel
+    - Lower temperature (0.3-0.5) gives sharper, more tree-like routing
 
     References
     ----------
@@ -193,18 +257,30 @@ class NeuralDecisionForestRegressor(RegressorMixin, BaseKerasEstimator):
     tree architectures that enable end-to-end learning of routing decisions.
     """
 
-    num_trees: int = 10
-    depth: int = 5
+    num_trees: int = 25
+    depth: int = 4
     used_features_rate: float = 0.5
-    l2_reg: float = 0.01
+    l2_decision: float = 1e-4
+    l2_leaf: float = 1e-3
+    temperature: float = 0.5
+    input_noise_std: float = 0.0
+    tree_noise_std: float = 0.0
+    tree_dropout_rate: float = 0.0
+    trunk_units: list[int] | None = None
+    random_state: int | None = None
     metrics: list[str] | None = field(default_factory=lambda: ["mse"])
+
+    def __post_init__(self):
+        self.trees: list[NeuralDecisionTree] = []
 
     def build_model(self):
         """Build the neural decision forest model.
 
         Creates an ensemble of NeuralDecisionTree models with shared input
         and averaged output. Each tree receives normalized input features
-        via BatchNormalization.
+        via BatchNormalization. Optionally includes input noise (before trunk
+        for robustness), per-tree noise (for diversity), tree dropout, and
+        a shared MLP trunk.
 
         Returns
         -------
@@ -215,26 +291,61 @@ class NeuralDecisionForestRegressor(RegressorMixin, BaseKerasEstimator):
             if self.distribution_strategy:
                 self._setup_distribution_strategy()
 
+            # Set up RNG for reproducibility
+            rng = np.random.default_rng(self.random_state)
+
             # Input layer
             inputs = layers.Input(shape=(self._n_features_in_,))
-            features = layers.BatchNormalization()(inputs)
+            x = layers.BatchNormalization()(inputs)
+
+            # Input noise before trunk (makes trunk robust to perturbations)
+            if self.input_noise_std > 0:
+                x = layers.GaussianNoise(self.input_noise_std)(x)
+
+            # Optional shared trunk (MLP before trees)
+            if self.trunk_units:
+                for units in self.trunk_units:
+                    x = layers.Dense(units, activation="relu")(x)
+
+            # Determine feature count for trees (trunk output or raw features)
+            tree_num_features = (
+                self.trunk_units[-1] if self.trunk_units else self._n_features_in_
+            )
 
             # Create ensemble of trees
-            trees = []
+            self.trees = []
             for _ in range(self.num_trees):
                 tree = NeuralDecisionTree(
                     depth=self.depth,
-                    num_features=self._n_features_in_,
+                    num_features=tree_num_features,
                     used_features_rate=self.used_features_rate,
                     output_units=self.output_units,
-                    l2_reg=self.l2_reg,
+                    l2_decision=self.l2_decision,
+                    l2_leaf=self.l2_leaf,
+                    temperature=self.temperature,
+                    rng=rng,
                 )
-                trees.append(tree)
+                self.trees.append(tree)
 
-            # Aggregate predictions from all trees
-            tree_outputs = [tree(features) for tree in trees]
+            # Aggregate predictions - each tree gets its own noisy view for diversity
+            tree_outputs = []
+            for tree in self.trees:
+                if self.tree_noise_std > 0:
+                    noisy_x = layers.GaussianNoise(self.tree_noise_std)(x)
+                    tree_outputs.append(tree(noisy_x))
+                else:
+                    tree_outputs.append(tree(x))
+
             if len(tree_outputs) > 1:
-                outputs = K.mean(K.stack(tree_outputs, axis=0), axis=0)
+                stacked = K.stack(tree_outputs, axis=1)  # [batch, num_trees, out_units]
+                if self.tree_dropout_rate > 0:
+                    # Drop entire trees (not individual output elements)
+                    # noise_shape broadcasts across out_units so whole tree is dropped together
+                    stacked = layers.Dropout(
+                        self.tree_dropout_rate,
+                        noise_shape=(None, self.num_trees, 1),
+                    )(stacked)
+                outputs = K.mean(stacked, axis=1)
             else:
                 outputs = tree_outputs[0]
 
