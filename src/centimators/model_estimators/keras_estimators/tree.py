@@ -12,7 +12,45 @@ import numpy as np
 from sklearn.base import RegressorMixin
 
 from .base import BaseKerasEstimator
-from keras import layers, models, ops as K, regularizers
+from keras import layers, models, ops as K, regularizers, callbacks
+
+
+class TemperatureAnnealing(callbacks.Callback):
+    """Anneal tree routing temperature from soft to sharp over training.
+
+    Starts with high temperature (soft routing, samples flow through many paths)
+    and linearly decreases to low temperature (sharp routing, more tree-like).
+    This can theoretically help training converge to better solutions.
+
+    Parameters
+    ----------
+    ndf : NeuralDecisionForestRegressor
+        The forest instance whose trees will be annealed.
+    start : float, default=2.0
+        Starting temperature (soft routing).
+    end : float, default=0.5
+        Ending temperature (sharp routing).
+    epochs : int, default=50
+        Total epochs over which to anneal. Should match fit() epochs.
+
+    Example
+    -------
+    >>> ndf = NeuralDecisionForestRegressor(temperature=2.0)
+    >>> annealer = TemperatureAnnealing(ndf, start=2.0, end=0.5, epochs=50)
+    >>> ndf.fit(X, y, epochs=50, callbacks=[annealer])
+    """
+
+    def __init__(self, ndf, start: float = 2.0, end: float = 0.5, epochs: int = 50):
+        super().__init__()
+        self.ndf = ndf
+        self.start = start
+        self.end = end
+        self.epochs = epochs
+
+    def on_epoch_end(self, epoch, logs=None):
+        t = self.start - (self.start - self.end) * ((epoch + 1) / self.epochs)
+        for tree in self.ndf.trees:
+            tree.temperature.assign(t)
 
 
 class NeuralDecisionTree(models.Model):

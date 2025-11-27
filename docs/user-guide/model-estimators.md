@@ -132,18 +132,21 @@ preds = ndf.predict(X)
 
 #### Optional temperature annealing (advanced)
 
-You can manually anneal temperature if desired:
+Start with soft routing (high temperature) and anneal to sharp routing (low temperature):
 
 ```python
-from keras.callbacks import Callback
+from centimators.model_estimators import NeuralDecisionForestRegressor, TemperatureAnnealing
 
-class TemperatureAnnealing(Callback):
-    def __init__(self, ndf, start=2.0, end=0.5, epochs=50):
-        self.ndf, self.start, self.end, self.epochs = ndf, start, end, epochs
-    def on_epoch_end(self, epoch, logs=None):
-        t = self.start - (self.start - self.end) * ((epoch + 1) / self.epochs)
-        for tree in self.ndf.trees:
-            tree.temperature.assign(t)
+ndf = NeuralDecisionForestRegressor(
+    num_trees=25,
+    depth=4,
+    temperature=2.0,  # Start soft
+    random_state=42,
+)
+
+epochs = 50
+annealer = TemperatureAnnealing(ndf, start=2.0, end=0.5, epochs=epochs)
+ndf.fit(X, y, epochs=epochs, callbacks=[annealer])
 ```
 
 #### Notes
