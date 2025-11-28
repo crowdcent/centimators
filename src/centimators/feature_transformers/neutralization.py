@@ -1,12 +1,22 @@
 """Neutralization transformers for reducing feature exposure."""
 
+import warnings
+
 import narwhals as nw
 import numpy as np
+from joblib import Parallel, delayed
 from narwhals.typing import FrameT, IntoSeries
-from scipy import stats
+
+try:
+    from tqdm.auto import tqdm
+except ImportError:
+
+    def tqdm(iterable, **kwargs):
+        return iterable
+
 
 from ..narwhals_utils import _ensure_numpy
-from .base import _BaseFeatureTransformer
+from .base import _BaseFeatureTransformer, _gaussianize, _min_max_scale
 
 
 class FeatureNeutralizer(_BaseFeatureTransformer):
@@ -29,6 +39,8 @@ class FeatureNeutralizer(_BaseFeatureTransformer):
         feature_names (list of str, optional): Names of feature columns to neutralize against.
             If None, all columns of X are used.
         suffix (str, optional): Suffix to append to output column names.
+        n_jobs (int): Number of parallel jobs. 1 = sequential (default), -1 = all cores.
+        verbose (bool): Show progress bar over eras. Default False.
 
     Examples:
         >>> import pandas as pd
@@ -59,6 +71,8 @@ class FeatureNeutralizer(_BaseFeatureTransformer):
         pred_name: str | list[str] = "prediction",
         feature_names: list[str] | None = None,
         suffix: str | None = None,
+        n_jobs: int = 1,
+        verbose: bool = False,
     ):
         # Normalize inputs to lists
         self.pred_names = [pred_name] if isinstance(pred_name, str) else pred_name
@@ -72,6 +86,8 @@ class FeatureNeutralizer(_BaseFeatureTransformer):
             assert 0.0 <= prop <= 1.0, f"proportion should be in [0, 1]. Got {prop}."
 
         self.suffix = suffix
+        self.n_jobs = n_jobs
+        self.verbose = verbose
 
         # Generate output column names
         self._output_names = [
@@ -131,19 +147,34 @@ class FeatureNeutralizer(_BaseFeatureTransformer):
         if era_series is not None:
             eras = _ensure_numpy(era_series, allow_series=True)
         else:
-            # Single era
+            warnings.warn(
+                "era_series not provided. Treating all data as a single era. "
+                "This is fine for live inference (1 era) but may be incorrect "
+                "for training data with multiple eras.",
+                UserWarning,
+            )
             eras = np.array(["X"] * len(predictions))
 
         # Process each prediction column and proportion
-        results = []
-        for pred_idx, pred_name in enumerate(self.pred_names):
-            pred_col = predictions[:, pred_idx]
-
-            for proportion in self.proportions:
-                neutralized = self._neutralize_by_era(
-                    pred_col, feature_array, eras, proportion
+        if self.n_jobs == 1:
+            # Sequential
+            results = [
+                self._neutralize_by_era(
+                    predictions[:, pred_idx], feature_array, eras, prop, self.verbose
                 )
-                results.append(neutralized)
+                for pred_idx in range(len(self.pred_names))
+                for prop in self.proportions
+            ]
+        else:
+            # Parallel via joblib (disable verbose)
+            tasks = [
+                delayed(self._neutralize_by_era)(
+                    predictions[:, pred_idx], feature_array, eras, prop, False
+                )
+                for pred_idx in range(len(self.pred_names))
+                for prop in self.proportions
+            ]
+            results = Parallel(n_jobs=self.n_jobs)(tasks)
 
         # Stack results and convert back to dataframe with native type
         result_array = np.column_stack(results)
@@ -163,56 +194,31 @@ class FeatureNeutralizer(_BaseFeatureTransformer):
 
         return result_df
 
-    def predict(self, X, **kwargs):
-        """For compatibility to use Neutralizer as the last step in an sklearn pipeline."""
-        return self.transform(X, **kwargs)
-
     def _neutralize_by_era(
         self,
         predictions: np.ndarray,
         features: np.ndarray,
         eras: np.ndarray,
         proportion: float,
+        verbose: bool = False,
     ) -> np.ndarray:
         """Neutralize predictions era by era."""
         unique_eras = np.unique(eras)
         neutralized = np.zeros_like(predictions)
 
-        for era in unique_eras:
+        era_iter = tqdm(unique_eras, desc=f"prop={proportion}", disable=not verbose)
+        for era in era_iter:
             mask = eras == era
             era_pred = predictions[mask]
             era_features = features[mask]
 
-            # Gaussianize
-            era_pred_norm = self._gaussianize(era_pred)
-
-            # Neutralize
+            # Gaussianize then neutralize
+            era_pred_norm = _gaussianize(era_pred)
             era_pred_neut = self._neutralize(era_pred_norm, era_features, proportion)
-
-            # Store
             neutralized[mask] = era_pred_neut
 
         # Scale all neutralized predictions to [0, 1]
-        neutralized = self._min_max_scale(neutralized)
-
-        return neutralized
-
-    @staticmethod
-    def _gaussianize(values: np.ndarray) -> np.ndarray:
-        """Gaussianize values via rank -> normalize -> inverse normal CDF.
-
-        Args:
-            values: 1D array to gaussianize
-
-        Returns:
-            Gaussianized values (mean ~0, std ~1)
-        """
-        # Rank (1-indexed)
-        ranks = stats.rankdata(values, method="ordinal")
-        # Normalize to (0, 1)
-        normalized = (ranks - 0.5) / len(values)
-        # Inverse normal CDF
-        return stats.norm.ppf(normalized)
+        return _min_max_scale(neutralized)
 
     @staticmethod
     def _neutralize(
@@ -240,16 +246,3 @@ class FeatureNeutralizer(_BaseFeatureTransformer):
 
         # Standardize
         return neutralized / np.std(neutralized)
-
-    @staticmethod
-    def _min_max_scale(values: np.ndarray) -> np.ndarray:
-        """Scale values to [0, 1]."""
-        min_val = np.min(values)
-        max_val = np.max(values)
-        if max_val - min_val < 1e-10:
-            # Constant values
-            return np.full_like(values, 0.5)
-        return (values - min_val) / (max_val - min_val)
-
-    def get_feature_names_out(self, input_features=None) -> list[str]:
-        return self._output_names

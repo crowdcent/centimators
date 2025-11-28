@@ -167,12 +167,13 @@ def test_neutralizer_no_era_series():
         feature_names=[f"feature{i}" for i in range(5)],
     )
 
-    # Should work without era_series (treated as single era)
-    result = neutralizer.fit_transform(
-        df[["prediction"]],
-        features=df.select([f"feature{i}" for i in range(5)]),
-        era_series=None,
-    )
+    # Should work without era_series (treated as single era) but warn
+    with pytest.warns(UserWarning, match="era_series not provided"):
+        result = neutralizer.fit_transform(
+            df[["prediction"]],
+            features=df.select([f"feature{i}" for i in range(5)]),
+            era_series=None,
+        )
 
     assert len(result) == len(df)
     assert "prediction_neutralized_0.5" in result.columns
