@@ -7,12 +7,14 @@ for original implementation and more details.
 """
 
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 from sklearn.base import RegressorMixin
+from sklearn.preprocessing import StandardScaler
 
 from .base import BaseKerasEstimator
-from keras import layers, models, ops as K, regularizers, callbacks
+from keras import layers, models, ops as K, regularizers, callbacks, initializers
 
 
 class TemperatureAnnealing(callbacks.Callback):
@@ -115,10 +117,8 @@ class NeuralDecisionTree(models.Model):
         self.depth = depth
         self.num_leaves = 2**depth
         self.output_units = output_units
-        self._init_temperature = temperature
 
         # Create a mask for the randomly selected features
-        # Fix edge case: ensure at least 1 feature is always selected
         num_used_features = max(1, int(round(num_features * used_features_rate)))
         one_hot = np.eye(num_features)
         if rng is None:
@@ -126,11 +126,16 @@ class NeuralDecisionTree(models.Model):
         sampled_feature_indices = rng.choice(
             np.arange(num_features), num_used_features, replace=False
         )
-        self.used_features_mask = K.convert_to_tensor(
-            one_hot[sampled_feature_indices], dtype="float32"
+        mask_value = one_hot[sampled_feature_indices].astype("float32")
+
+        self.used_features_mask = self.add_weight(
+            name="used_features_mask",
+            shape=mask_value.shape,
+            initializer=initializers.Constant(mask_value),
+            trainable=False,
         )
 
-        # Initialize the weights of the outputs in leaves with L2 regularization
+        # Initialize the weights of the outputs in leaves
         self.pi = self.add_weight(
             initializer="random_normal",
             shape=[self.num_leaves, self.output_units],
@@ -307,6 +312,7 @@ class NeuralDecisionForestRegressor(RegressorMixin, BaseKerasEstimator):
     trunk_units: list[int] | None = None
     random_state: int | None = None
     metrics: list[str] | None = field(default_factory=lambda: ["mse"])
+    target_scaler: Any = field(default_factory=StandardScaler)
 
     def __post_init__(self):
         self.trees: list[NeuralDecisionTree] = []
@@ -365,7 +371,7 @@ class NeuralDecisionForestRegressor(RegressorMixin, BaseKerasEstimator):
                 )
                 self.trees.append(tree)
 
-            # Aggregate predictions - each tree gets its own noisy view for diversity
+            # each tree gets its own noisy view for diversity
             tree_outputs = []
             for tree in self.trees:
                 if self.tree_noise_std > 0:
@@ -377,11 +383,14 @@ class NeuralDecisionForestRegressor(RegressorMixin, BaseKerasEstimator):
             if len(tree_outputs) > 1:
                 stacked = K.stack(tree_outputs, axis=1)  # [batch, num_trees, out_units]
                 if self.tree_dropout_rate > 0:
-                    # Drop entire trees (not individual output elements)
-                    # noise_shape broadcasts across out_units so whole tree is dropped together
+                    # Drop entire trees
                     stacked = layers.Dropout(
                         self.tree_dropout_rate,
-                        noise_shape=(None, self.num_trees, 1),
+                        noise_shape=(
+                            None,
+                            self.num_trees,
+                            1,
+                        ),  # broadcasts so whole tree is dropped
                     )(stacked)
                 outputs = K.mean(stacked, axis=1)
             else:

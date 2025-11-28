@@ -1,8 +1,10 @@
 """Dense feedforward neural network estimators."""
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from sklearn.base import RegressorMixin
+from sklearn.preprocessing import StandardScaler
 
 from .base import BaseKerasEstimator
 from keras import layers, models
@@ -16,6 +18,7 @@ class MLPRegressor(RegressorMixin, BaseKerasEstimator):
     activation: str = "relu"
     dropout_rate: float = 0.0
     metrics: list[str] | None = field(default_factory=lambda: ["mse"])
+    target_scaler: Any = field(default_factory=StandardScaler)
 
     def build_model(self):
         inputs = layers.Input(shape=(self._n_features_in_,), name="features")

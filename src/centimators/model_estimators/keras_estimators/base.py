@@ -25,7 +25,29 @@ from centimators.narwhals_utils import _ensure_numpy
 
 @dataclass(kw_only=True)
 class BaseKerasEstimator(TransformerMixin, BaseEstimator, ABC):
-    """Meta-estimator for Keras models following the scikit-learn API."""
+    """Meta-estimator for Keras models following the scikit-learn API.
+
+    Parameters
+    ----------
+    output_units : int, default=1
+        Number of output units in the final layer.
+    optimizer : Type[optimizers.Optimizer], default=Adam
+        Keras optimizer class to use for training.
+    learning_rate : float, default=0.001
+        Learning rate for the optimizer.
+    loss_function : str, default="mse"
+        Loss function name passed to model.compile().
+    metrics : list[str] | None, default=None
+        List of metric names to track during training.
+    model : Any, default=None
+        The underlying Keras model (populated by build_model).
+    distribution_strategy : str | None, default=None
+        If set, enables DataParallel distribution for multi-device training.
+    target_scaler : sklearn transformer | None, default=None
+        Scaler for target values. Neural networks converge better when
+        targets are normalized. Subclasses may override the default
+        (e.g., regressors default to StandardScaler).
+    """
 
     output_units: int = 1
     optimizer: Type[optimizers.Optimizer] = optimizers.Adam
@@ -34,6 +56,7 @@ class BaseKerasEstimator(TransformerMixin, BaseEstimator, ABC):
     metrics: list[str] | None = None
     model: Any = None
     distribution_strategy: str | None = None
+    target_scaler: Any = None
 
     @abstractmethod
     def build_model(self):
@@ -58,12 +81,34 @@ class BaseKerasEstimator(TransformerMixin, BaseEstimator, ABC):
         if self.distribution_strategy:
             self._setup_distribution_strategy()
 
+        # Convert inputs to numpy
+        X_np = _ensure_numpy(X)
+        y_np = _ensure_numpy(y, allow_series=True)
+
+        # Ensure y is 2D for scaler
+        y_was_1d = y_np.ndim == 1
+        if y_was_1d:
+            y_np = y_np.reshape(-1, 1)
+
+        # Scale targets for better neural network convergence
+        if self.target_scaler:
+            y_np = self.target_scaler.fit_transform(y_np).astype("float32")
+
+            # Scale validation targets too
+            if validation_data is not None:
+                val_X, val_y = validation_data
+                val_y_np = _ensure_numpy(val_y, allow_series=True)
+                if val_y_np.ndim == 1:
+                    val_y_np = val_y_np.reshape(-1, 1)
+                val_y_scaled = self.target_scaler.transform(val_y_np).astype("float32")
+                validation_data = (_ensure_numpy(val_X), val_y_scaled)
+
         if not self.model:
             self.build_model()
 
         self.model.fit(
-            _ensure_numpy(X),
-            y=_ensure_numpy(y, allow_series=True),
+            X_np,
+            y=y_np,
             batch_size=batch_size,
             epochs=epochs,
             validation_data=validation_data,
@@ -82,14 +127,22 @@ class BaseKerasEstimator(TransformerMixin, BaseEstimator, ABC):
             _ensure_numpy(X), batch_size=batch_size, **kwargs
         )
 
-        # Return numpy arrays for sklearn compatibility if input is numpy
+        # Inverse transform predictions back to original scale
+        if self.target_scaler:
+            predictions = self.target_scaler.inverse_transform(predictions)
+
+        # Return numpy arrays for numpy input
         if isinstance(X, numpy.ndarray):
             return predictions
 
-        # Return dataframe if input was a dataframe
+        # Return dataframe for dataframe input
         if predictions.ndim == 1:
             return nw.from_dict(
                 {"prediction": predictions}, backend=nw.get_native_namespace(X)
+            )
+        elif predictions.shape[1] == 1:
+            return nw.from_dict(
+                {"prediction": predictions[:, 0]}, backend=nw.get_native_namespace(X)
             )
         else:
             cols = {
