@@ -1,6 +1,6 @@
 [project]
 name = "centimators"
-version = "0.2.0"
+version = "0.3.0"
 description = "essential data transformers and model estimators for ML and data science competitions"
 readme = "README.md"
 authors = [
