@@ -1,8 +1,26 @@
 """Base classes and utilities for feature transformers."""
 
 import narwhals as nw
+import numpy as np
 from narwhals.typing import FrameT, IntoSeries
+from scipy import stats
 from sklearn.base import BaseEstimator, TransformerMixin
+
+
+def _gaussianize(values: np.ndarray) -> np.ndarray:
+    """Gaussianize values via rank -> normalize -> inverse normal CDF."""
+    ranks = stats.rankdata(values, method="ordinal")
+    normalized = (ranks - 0.5) / len(values)
+    return stats.norm.ppf(normalized)
+
+
+def _min_max_scale(values: np.ndarray) -> np.ndarray:
+    """Scale values to [0, 1]."""
+    min_val = np.min(values)
+    max_val = np.max(values)
+    if max_val - min_val < 1e-10:
+        return np.full_like(values, 0.5)
+    return (values - min_val) / (max_val - min_val)
 
 
 def _attach_group(X: FrameT, series: IntoSeries, default_name: str):
@@ -36,7 +54,7 @@ class _BaseFeatureTransformer(TransformerMixin, BaseEstimator):
     def __init__(self, feature_names: list[str] | None = None):
         self.feature_names = feature_names
 
-    def fit(self, X: FrameT, y=None):
+    def fit(self, X: FrameT, y=None, **kwargs):
         if self.feature_names is None:
             self.feature_names = X.columns
 
@@ -52,3 +70,11 @@ class _BaseFeatureTransformer(TransformerMixin, BaseEstimator):
     def __sklearn_is_fitted__(self) -> bool:
         """Return ``True`` when the transformer has been fitted."""
         return getattr(self, "_is_fitted", False)
+
+    def predict(self, X, **kwargs):
+        """For sklearn compatibility, allow as last step in a pipeline."""
+        return self.transform(X, **kwargs)
+
+    def get_feature_names_out(self, input_features=None) -> list[str]:
+        """Return output feature names."""
+        return self._output_names

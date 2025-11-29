@@ -15,6 +15,7 @@ from centimators.feature_transformers import (  # noqa: E402
     MovingAverageTransformer,
     LogReturnTransformer,
     GroupStatsTransformer,
+    FeatureNeutralizer,
 )
 
 from centimators.config import set_keras_backend, get_keras_backend  # noqa: E402
@@ -26,6 +27,7 @@ __all__ = [
     "MLPRegressor",
     "BottleneckEncoder",
     "LSTMRegressor",
+    "NeuralDecisionForestRegressor",
     "DSPyMator",
     "KerasCortex",
     # Feature Transformers
@@ -36,6 +38,8 @@ __all__ = [
     "GroupStatsTransformer",
     "EmbeddingTransformer",
     "DimReducer",
+    "FeatureNeutralizer",
+    "FeaturePenalizer",
     # Config helpers
     "set_keras_backend",
     "get_keras_backend",
@@ -48,6 +52,7 @@ _LAZY_IMPORTS = {
     "MLPRegressor": "centimators.model_estimators.keras_estimators.dense",
     "BottleneckEncoder": "centimators.model_estimators.keras_estimators.autoencoder",
     "LSTMRegressor": "centimators.model_estimators.keras_estimators.sequence",
+    "NeuralDecisionForestRegressor": "centimators.model_estimators.keras_estimators.tree",
     # DSPy estimator
     "DSPyMator": "centimators.model_estimators.dspymator",
     # Meta-estimator
@@ -55,6 +60,7 @@ _LAZY_IMPORTS = {
     # Feature transformers with optional dependencies
     "EmbeddingTransformer": "centimators.feature_transformers.embedding",
     "DimReducer": "centimators.feature_transformers.dimreduction",
+    "FeaturePenalizer": "centimators.feature_transformers.penalization",
 }
 
 

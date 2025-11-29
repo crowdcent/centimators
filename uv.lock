@@ -371,7 +371,7 @@ wheels = [
 
 [[package]]
 name = "centimators"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "narwhals" },
@@ -384,6 +384,7 @@ all = [
     { name = "jax" },
     { name = "jaxlib" },
     { name = "keras" },
+    { name = "tqdm" },
     { name = "umap-learn" },
 ]
 dspy = [
@@ -430,6 +431,7 @@ requires-dist = [
     { name = "keras", marker = "extra == 'keras-jax'", specifier = ">=3.9.2" },
     { name = "narwhals", specifier = ">=1.39.0" },
     { name = "scikit-learn", specifier = ">=1.6.1" },
+    { name = "tqdm", marker = "extra == 'all'", specifier = ">=4.66.0" },
     { name = "umap-learn", marker = "extra == 'all'", specifier = ">=0.5.9.post2" },
 ]
 provides-extras = ["keras-jax", "dspy", "all"]

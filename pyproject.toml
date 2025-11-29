@@ -1,6 +1,6 @@
 [project]
 name = "centimators"
-version = "0.2.0"
+version = "0.3.0"
 description = "essential data transformers and model estimators for ML and data science competitions"
 readme = "README.md"
 authors = [
@@ -26,6 +26,7 @@ all = [
     "jax>=0.6.31",
     "jaxlib>=0.4.31",
     "dspy>=2.6.24",
+    "tqdm>=4.66.0",
     "umap-learn>=0.5.9.post2",
 ]
 

@@ -12,6 +12,7 @@ from centimators.model_estimators import (
     MLPRegressor,
     LSTMRegressor,
     BottleneckEncoder,
+    NeuralDecisionForestRegressor,
 )
 
 
@@ -343,3 +344,198 @@ def test_base_keras_estimator_validation_data_bug():
         pytest.fail(
             f"BaseKerasEstimator failed to handle DataFrame validation data: {e}"
         )
+
+
+@pytest.mark.parametrize(
+    "n_samples,n_features,num_trees,depth",
+    [
+        (20, 4, 3, 3),
+        (30, 6, 5, 4),
+    ],
+)
+def test_neural_decision_forest_fit_predict(n_samples, n_features, num_trees, depth):
+    """NeuralDecisionForestRegressor should fit and return predictions with correct shape."""
+    rng = np.random.default_rng(42)
+    X = rng.standard_normal((n_samples, n_features)).astype("float32")
+    y = rng.standard_normal((n_samples, 1)).astype("float32")
+
+    est = NeuralDecisionForestRegressor(
+        num_trees=num_trees,
+        depth=depth,
+        used_features_rate=0.7,
+        output_units=1,
+        learning_rate=1e-3,
+    )
+
+    # Train for a single epoch to keep the test fast
+    est.fit(X, y, epochs=1, batch_size=4, verbose=0)
+
+    preds = est.predict(X, batch_size=4, verbose=0)
+
+    # Shape checks
+    assert preds.shape == (n_samples, 1)
+
+    # The estimator should report itself as fitted for sklearn utilities
+    assert est.__sklearn_is_fitted__() is True
+
+
+def test_neural_decision_forest_with_dataframes():
+    """NeuralDecisionForestRegressor should handle pandas and polars inputs."""
+    import pandas as pd
+    import polars as pl
+
+    rng = np.random.default_rng(42)
+    n_samples, n_features = 20, 5
+
+    # Create data in different formats
+    X_numpy = rng.standard_normal((n_samples, n_features)).astype("float32")
+    y_numpy = rng.standard_normal((n_samples,)).astype("float32")
+
+    X_pandas = pd.DataFrame(X_numpy, columns=[f"feat_{i}" for i in range(n_features)])
+    y_pandas = pd.Series(y_numpy, name="target")
+
+    X_polars = pl.DataFrame(X_numpy, schema=[f"feat_{i}" for i in range(n_features)])
+    y_polars = pl.Series("target", y_numpy)
+
+    # Test with each input type
+    for X, y, input_type in [
+        (X_numpy, y_numpy, "numpy"),
+        (X_pandas, y_pandas, "pandas"),
+        (X_polars, y_polars, "polars"),
+    ]:
+        est = NeuralDecisionForestRegressor(
+            num_trees=3, depth=3, used_features_rate=0.8, output_units=1
+        )
+
+        # Fit should work with all types
+        est.fit(X, y, epochs=1, batch_size=4, verbose=0)
+
+        # Predict should also work with all types
+        preds = est.predict(X, batch_size=4, verbose=0)
+        assert preds.shape == (n_samples, 1), f"Failed for {input_type} input"
+
+
+def test_neural_decision_forest_single_tree():
+    """Test NeuralDecisionForestRegressor with a single tree."""
+    rng = np.random.default_rng(123)
+    n_samples, n_features = 15, 4
+
+    X = rng.standard_normal((n_samples, n_features)).astype("float32")
+    y = rng.standard_normal((n_samples, 1)).astype("float32")
+
+    # Single tree should work without issues
+    est = NeuralDecisionForestRegressor(
+        num_trees=1, depth=3, used_features_rate=1.0, output_units=1
+    )
+
+    est.fit(X, y, epochs=1, batch_size=4, verbose=0)
+    preds = est.predict(X, batch_size=4, verbose=0)
+
+    assert preds.shape == (n_samples, 1)
+    assert est.__sklearn_is_fitted__() is True
+
+
+def test_target_scaling_with_validation_data():
+    """Test that target scaling is applied to both training and validation data.
+
+    Uses unscaled targets with large values. If validation targets aren't scaled,
+    val_loss would be orders of magnitude larger than train_loss.
+    """
+    from keras import callbacks
+
+    rng = np.random.default_rng(42)
+    n_train, n_val, n_features = 50, 20, 4
+
+    X_train = rng.standard_normal((n_train, n_features)).astype("float32")
+    X_val = rng.standard_normal((n_val, n_features)).astype("float32")
+
+    # Large-scale targets (mean ~100, not ~0)
+    y_train = (rng.standard_normal((n_train, 1)) * 20 + 100).astype("float32")
+    y_val = (rng.standard_normal((n_val, 1)) * 20 + 100).astype("float32")
+
+    est = MLPRegressor(hidden_units=(8,), output_units=1)
+
+    # Capture training history to check losses
+    class CaptureLossCallback(callbacks.Callback):
+        def __init__(self):
+            super().__init__()
+            self.train_loss = None
+            self.val_loss = None
+
+        def on_epoch_end(self, epoch, logs=None):
+            self.train_loss = logs.get("loss")
+            self.val_loss = logs.get("val_loss")
+
+    loss_callback = CaptureLossCallback()
+
+    est.fit(
+        X_train,
+        y_train,
+        validation_data=(X_val, y_val),
+        epochs=5,
+        batch_size=8,
+        verbose=0,
+        callbacks=[loss_callback],
+    )
+
+    # Key assertion: if validation targets were scaled, val_loss should be
+    # in the same order of magnitude as train_loss (both ~0.1-10 for normalized data).
+    # If NOT scaled, val_loss would be ~10000+ (MSE of targets ~100 vs predictions ~0)
+    assert loss_callback.val_loss is not None, "val_loss should be captured"
+    assert loss_callback.val_loss < 100, (
+        f"val_loss={loss_callback.val_loss} suggests validation targets weren't scaled"
+    )
+
+    # Also verify predictions are in original scale
+    preds = est.predict(X_val, verbose=0)
+    assert preds.mean() > 50, (
+        f"Predictions should be inverse-scaled to ~100, got mean={preds.mean():.1f}"
+    )
+
+
+def test_predict_output_types():
+    """Predict should return the same DataFrame type as input (pandas/polars)."""
+    import pandas as pd
+    import polars as pl
+
+    rng = np.random.default_rng(42)
+    n_samples, n_features = 20, 4
+    X_np = rng.standard_normal((n_samples, n_features)).astype("float32")
+    y_np = rng.standard_normal((n_samples,)).astype("float32")
+
+    col_names = [f"feat_{i}" for i in range(n_features)]
+
+    est = MLPRegressor(hidden_units=(8,), output_units=1)
+    est.fit(X_np, y_np, epochs=1, verbose=0)
+
+    # Case 1: Numpy -> Numpy
+    pred_np = est.predict(X_np)
+    assert isinstance(pred_np, np.ndarray)
+
+    # Case 2: Pandas -> Pandas
+    X_pd = pd.DataFrame(X_np, columns=col_names)
+    pred_pd = est.predict(X_pd)
+    assert isinstance(pred_pd, pd.DataFrame)
+    assert "prediction" in pred_pd.columns
+    assert len(pred_pd) == n_samples
+
+    # Case 3: Polars -> Polars
+    X_pl = pl.DataFrame(X_np, schema=col_names)
+    pred_pl = est.predict(X_pl)
+    assert isinstance(pred_pl, pl.DataFrame)
+    assert "prediction" in pred_pl.columns
+    assert len(pred_pl) == n_samples
+
+    # Case 4: Multi-output regression
+    est_multi = MLPRegressor(hidden_units=(8,), output_units=2)
+    y_multi = rng.standard_normal((n_samples, 2)).astype("float32")
+    est_multi.fit(X_np, y_multi, epochs=1, verbose=0)
+
+    # Should return dataframe with 2 columns
+    pred_multi_pd = est_multi.predict(X_pd)
+    assert isinstance(pred_multi_pd, pd.DataFrame)
+    assert list(pred_multi_pd.columns) == ["prediction_0", "prediction_1"]
+
+    pred_multi_pl = est_multi.predict(X_pl)
+    assert isinstance(pred_multi_pl, pl.DataFrame)
+    assert pred_multi_pl.columns == ["prediction_0", "prediction_1"]

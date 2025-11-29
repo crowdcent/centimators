@@ -12,6 +12,7 @@ from .base import BaseKerasEstimator
 from .dense import MLPRegressor
 from .autoencoder import BottleneckEncoder
 from .sequence import SequenceEstimator, LSTMRegressor
+from .tree import NeuralDecisionForestRegressor, TemperatureAnnealing
 
 __all__ = [
     "BaseKerasEstimator",
@@ -19,4 +20,6 @@ __all__ = [
     "BottleneckEncoder",
     "SequenceEstimator",
     "LSTMRegressor",
+    "NeuralDecisionForestRegressor",
+    "TemperatureAnnealing",
 ]

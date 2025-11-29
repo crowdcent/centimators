@@ -6,20 +6,11 @@ from typing import Any
 import narwhals as nw
 from narwhals.typing import IntoFrame
 from sklearn.base import RegressorMixin
-
-try:
-    from keras import ops, layers, models
-except ImportError as e:
-    raise ImportError(
-        "Keras estimators require keras and jax (or another Keras-compatible backend). Install with:\n"
-        "  uv add 'centimators[keras-jax]'\n"
-        "or:\n"
-        "  pip install 'centimators[keras-jax]'"
-    ) from e
-
+from sklearn.preprocessing import StandardScaler
 import numpy
 
 from .base import BaseKerasEstimator, _ensure_numpy
+from keras import ops, layers, models
 
 
 @dataclass(kw_only=True)
@@ -74,6 +65,10 @@ class SequenceEstimator(BaseKerasEstimator):
             _ensure_numpy(X_reshaped), batch_size=batch_size, **kwargs
         )
 
+        # Inverse transform predictions back to original scale
+        if self.target_scaler:
+            predictions = self.target_scaler.inverse_transform(predictions)
+
         # Use X_original (not X_reshaped) for backend detection
         if isinstance(X_original, numpy.ndarray):
             return predictions
@@ -101,6 +96,7 @@ class LSTMRegressor(RegressorMixin, SequenceEstimator):
     use_layer_norm: bool = False
     bidirectional: bool = False
     metrics: list[str] | None = field(default_factory=lambda: ["mse"])
+    target_scaler: Any = field(default_factory=StandardScaler)
 
     def build_model(self):
         if self._n_features_in_ is None:

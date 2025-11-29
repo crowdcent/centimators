@@ -29,16 +29,51 @@ Highlights:
     Embedder, supporting both hosted models and custom embedding functions.
     * **DimReducer** – reduces feature dimensionality using PCA, t-SNE, or UMAP
     for feature compression and visualization.
+    * **FeatureNeutralizer** – neutralizes predictions by removing linear exposure
+    to features, reducing feature correlation while preserving signal.
+    * **FeaturePenalizer** – uses iterative optimization to cap feature exposure
+    while preserving more of the original signal (requires JAX).
 """
 
-from .ranking import RankTransformer
-from .time_series import LagTransformer, MovingAverageTransformer, LogReturnTransformer
-from .stats import GroupStatsTransformer
+from importlib import import_module
+from typing import Any
 
 __all__ = [
+    # Core transformers (no optional deps)
     "RankTransformer",
     "LagTransformer",
     "MovingAverageTransformer",
     "LogReturnTransformer",
     "GroupStatsTransformer",
+    "FeatureNeutralizer",
+    # Optional deps
+    "EmbeddingTransformer",  # requires dspy
+    "DimReducer",  # umap is optional within
+    "FeaturePenalizer",  # requires jax
 ]
+
+_LAZY_IMPORTS: dict[str, str] = {
+    # Core transformers
+    "RankTransformer": "centimators.feature_transformers.ranking",
+    "LagTransformer": "centimators.feature_transformers.time_series",
+    "MovingAverageTransformer": "centimators.feature_transformers.time_series",
+    "LogReturnTransformer": "centimators.feature_transformers.time_series",
+    "GroupStatsTransformer": "centimators.feature_transformers.stats",
+    "FeatureNeutralizer": "centimators.feature_transformers.neutralization",
+    # Optional deps
+    "EmbeddingTransformer": "centimators.feature_transformers.embedding",
+    "DimReducer": "centimators.feature_transformers.dimreduction",
+    "FeaturePenalizer": "centimators.feature_transformers.penalization",
+}
+
+
+def __getattr__(name: str) -> Any:
+    module_path = _LAZY_IMPORTS.get(name)
+    if module_path is None:
+        raise AttributeError(
+            f"module 'centimators.feature_transformers' has no attribute {name!r}"
+        )
+    module = import_module(module_path)
+    attr = getattr(module, name)
+    globals()[name] = attr  # cache for future access
+    return attr
