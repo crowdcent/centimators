@@ -168,7 +168,13 @@ reduced_features = umap_reducer.fit_transform(X)
 
 ## FeatureNeutralizer
 
-Reduces feature exposure in predictions by subtracting a proportion of the linear relationship between predictions and features. Essential for Numerai and similar competitions where feature exposure can hurt performance.
+In competitions like Numerai, your model's predictions often correlate with specific features—this is called **feature exposure**. High exposure to any single feature can hurt performance when that feature's predictive power shifts over time.
+
+`FeatureNeutralizer` reduces exposure by subtracting a proportion of the linear relationship between your predictions and the features. Think of it as "de-correlating" your signal from known factors.
+
+![Feature Neutralization](../assets/images/neutralization.png)
+
+The chart shows predictions before (coral) and after (cyan) 50% neutralization.
 
 ```python
 from centimators.feature_transformers import FeatureNeutralizer
@@ -189,10 +195,12 @@ neutralized = neutralizer.fit_transform(
 
 **How it works:**
 
-1. Gaussianizes predictions (rank → normalize → inverse CDF)
-2. Fits linear model: `prediction ~ features`
-3. Subtracts `proportion * exposure` from predictions
-4. Re-normalizes and scales to [0, 1]
+1. Gaussianizes predictions within each era
+2. Fits a linear model: `prediction ~ features`
+3. Subtracts `proportion × exposure` from predictions
+4. Re-normalizes to [0, 1]
+
+**Trade-off:** Higher proportion = less feature exposure, but also potentially less signal. At `proportion=1.0`, you remove all linear relationship with features.
 
 ## FeaturePenalizer
 
@@ -202,7 +210,11 @@ neutralized = neutralizer.fit_transform(
     uv add 'centimators[keras-jax]'
     ```
 
-Caps feature exposure using iterative optimization. Unlike neutralization which subtracts a fixed proportion, penalization finds the *minimal* adjustment to cap all exposures below a threshold—preserving more signal.
+`FeaturePenalizer` takes a different approach: instead of subtracting a fixed proportion, it uses gradient descent to find the *minimal* adjustment that caps all exposures below a threshold.
+
+![Feature Penalization](../assets/images/penalization.png)
+
+The key difference from neutralization: penalization enforces a hard cap (dashed lines at ±0.1). Every cyan bar stays within bounds—the optimizer finds the smallest change needed to achieve this.
 
 ```python
 from centimators.feature_transformers import FeaturePenalizer
@@ -220,6 +232,7 @@ penalized = penalizer.fit_transform(
 )
 # Output: prediction_penalized_0.1
 ```
+
 
 ## EmbeddingTransformer
 
