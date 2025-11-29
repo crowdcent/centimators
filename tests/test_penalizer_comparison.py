@@ -441,7 +441,7 @@ if __name__ == "__main__":
     jax_result = penalize_jax(predictions, features, max_exp)
     jax_time = time.perf_counter() - start
     jax_exp = np.abs(_exposures_numpy(features - 0.5, jax_result[:, None])).max()
-    print(f"  Time: {jax_time*1000:.0f}ms")
+    print(f"  Time: {jax_time * 1000:.0f}ms")
     print(f"  Max exposure after: {jax_exp:.4f}")
 
     try:
@@ -496,7 +496,7 @@ if __name__ == "__main__":
         pytorch_exp = np.abs(
             _exposures_numpy(features - 0.5, pytorch_result[:, None])
         ).max()
-        print(f"  Time: {pytorch_time*1000:.0f}ms")
+        print(f"  Time: {pytorch_time * 1000:.0f}ms")
         print(f"  Max exposure after: {pytorch_exp:.4f}")
 
         jax_scaled = _min_max_scale(jax_result / np.std(jax_result))
@@ -505,7 +505,7 @@ if __name__ == "__main__":
             f"  Correlation with JAX: {np.corrcoef(jax_scaled, pytorch_scaled)[0, 1]:.4f}"
         )
 
-        print(f"\n=== JAX is {pytorch_time/jax_time:.0f}x faster than PyTorch ===")
+        print(f"\n=== JAX is {pytorch_time / jax_time:.0f}x faster than PyTorch ===")
     except ImportError:
         print("\nPyTorch not installed, skipping...")
 
