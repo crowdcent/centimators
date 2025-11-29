@@ -482,15 +482,15 @@ def test_target_scaling_with_validation_data():
     # in the same order of magnitude as train_loss (both ~0.1-10 for normalized data).
     # If NOT scaled, val_loss would be ~10000+ (MSE of targets ~100 vs predictions ~0)
     assert loss_callback.val_loss is not None, "val_loss should be captured"
-    assert (
-        loss_callback.val_loss < 100
-    ), f"val_loss={loss_callback.val_loss} suggests validation targets weren't scaled"
+    assert loss_callback.val_loss < 100, (
+        f"val_loss={loss_callback.val_loss} suggests validation targets weren't scaled"
+    )
 
     # Also verify predictions are in original scale
     preds = est.predict(X_val, verbose=0)
-    assert (
-        preds.mean() > 50
-    ), f"Predictions should be inverse-scaled to ~100, got mean={preds.mean():.1f}"
+    assert preds.mean() > 50, (
+        f"Predictions should be inverse-scaled to ~100, got mean={preds.mean():.1f}"
+    )
 
 
 def test_predict_output_types():

@@ -99,9 +99,9 @@ class FeaturePenalizer(_BaseFeatureTransformer):
         )
 
         # Validate
-        assert len(self.pred_names) == len(
-            set(self.pred_names)
-        ), "Duplicate pred_names found."
+        assert len(self.pred_names) == len(set(self.pred_names)), (
+            "Duplicate pred_names found."
+        )
         for exp in self.max_exposures:
             assert 0.0 <= exp <= 1.0, f"max_exposure should be in [0, 1]. Got {exp}."
 

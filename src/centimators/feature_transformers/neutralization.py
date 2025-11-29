@@ -79,9 +79,9 @@ class FeatureNeutralizer(_BaseFeatureTransformer):
         self.proportions = [proportion] if isinstance(proportion, float) else proportion
 
         # Validate
-        assert len(self.pred_names) == len(
-            set(self.pred_names)
-        ), "Duplicate pred_names found."
+        assert len(self.pred_names) == len(set(self.pred_names)), (
+            "Duplicate pred_names found."
+        )
         for prop in self.proportions:
             assert 0.0 <= prop <= 1.0, f"proportion should be in [0, 1]. Got {prop}."
 
@@ -134,14 +134,14 @@ class FeatureNeutralizer(_BaseFeatureTransformer):
 
         # Ensure predictions is 2D
         if predictions.ndim == 1:
-            assert (
-                len(self.pred_names) == 1
-            ), "predictions is 1D but multiple pred_names given"
+            assert len(self.pred_names) == 1, (
+                "predictions is 1D but multiple pred_names given"
+            )
             predictions = predictions.reshape(-1, 1)
         else:
-            assert (
-                predictions.shape[1] == len(self.pred_names)
-            ), f"predictions has {predictions.shape[1]} cols but {len(self.pred_names)} pred_names"
+            assert predictions.shape[1] == len(self.pred_names), (
+                f"predictions has {predictions.shape[1]} cols but {len(self.pred_names)} pred_names"
+            )
 
         # Convert era_series to numpy
         if era_series is not None:

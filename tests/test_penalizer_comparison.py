@@ -261,9 +261,9 @@ def test_jax_reduces_exposure(test_data):
 
     # Check exposures are reduced
     final_exp = np.abs(_exposures_numpy(features - 0.5, penalized[:, None]))
-    assert (
-        final_exp.max() <= max_exp + 0.01
-    ), f"Max exposure {final_exp.max():.3f} exceeds {max_exp}"
+    assert final_exp.max() <= max_exp + 0.01, (
+        f"Max exposure {final_exp.max():.3f} exceeds {max_exp}"
+    )
 
 
 def test_pytorch_reduces_exposure(test_data):
@@ -277,9 +277,9 @@ def test_pytorch_reduces_exposure(test_data):
 
     # Check exposures are reduced
     final_exp = np.abs(_exposures_numpy(features - 0.5, penalized[:, None]))
-    assert (
-        final_exp.max() <= max_exp + 0.01
-    ), f"Max exposure {final_exp.max():.3f} exceeds {max_exp}"
+    assert final_exp.max() <= max_exp + 0.01, (
+        f"Max exposure {final_exp.max():.3f} exceeds {max_exp}"
+    )
 
 
 def test_tensorflow_reduces_exposure(test_data):
@@ -293,9 +293,9 @@ def test_tensorflow_reduces_exposure(test_data):
 
     # Check exposures are reduced
     final_exp = np.abs(_exposures_numpy(features - 0.5, penalized[:, None]))
-    assert (
-        final_exp.max() <= max_exp + 0.01
-    ), f"Max exposure {final_exp.max():.3f} exceeds {max_exp}"
+    assert final_exp.max() <= max_exp + 0.01, (
+        f"Max exposure {final_exp.max():.3f} exceeds {max_exp}"
+    )
 
 
 def test_jax_vs_pytorch_equivalence(test_data):
@@ -313,9 +313,9 @@ def test_jax_vs_pytorch_equivalence(test_data):
 
     # Correlation should be very high (>0.95)
     correlation = np.corrcoef(jax_scaled, pytorch_scaled)[0, 1]
-    assert (
-        correlation > 0.95
-    ), f"Correlation {correlation:.3f} too low between JAX and PyTorch"
+    assert correlation > 0.95, (
+        f"Correlation {correlation:.3f} too low between JAX and PyTorch"
+    )
 
 
 def test_jax_vs_tensorflow_equivalence(test_data):
@@ -333,9 +333,9 @@ def test_jax_vs_tensorflow_equivalence(test_data):
 
     # Correlation should be very high (>0.95)
     correlation = np.corrcoef(jax_scaled, tf_scaled)[0, 1]
-    assert (
-        correlation > 0.95
-    ), f"Correlation {correlation:.3f} too low between JAX and TensorFlow"
+    assert correlation > 0.95, (
+        f"Correlation {correlation:.3f} too low between JAX and TensorFlow"
+    )
 
 
 def test_feature_penalizer_class(test_data):
