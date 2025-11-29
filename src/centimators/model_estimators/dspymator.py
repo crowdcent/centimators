@@ -117,7 +117,10 @@ class DSPyMator(TransformerMixin, BaseEstimator):
         feature_names: Column names mapping input data to signature input fields.
             If None, inferred from dataframe columns or uses signature field names
             for numpy arrays. Must match the number of input fields in the signature.
-        lm: Language model identifier (e.g., "openai/gpt-4", "anthropic/claude-3").
+        lm: Language model - either a string identifier (e.g., "openai/gpt-4") or a
+            pre-configured `dspy.LM` object. Pass a `dspy.LM` directly when you need
+            custom configuration like `api_key` or `api_base` for providers like OpenRouter.
+            When passing an LM object, `temperature` and `max_tokens` are ignored.
             Defaults to "openai/gpt-5-nano".
         temperature: Sampling temperature for the language model. Defaults to 1.0.
         max_tokens: Maximum tokens in model responses. Defaults to 16000.
@@ -167,7 +170,7 @@ class DSPyMator(TransformerMixin, BaseEstimator):
     program: dspy.Module
     target_names: str | list[str]
     feature_names: list[str] | None = None
-    lm: str = "openai/gpt-5-nano"
+    lm: str | dspy.LM = "openai/gpt-5-nano"
     temperature: float = 1.0
     max_tokens: int = 16000
     use_async: bool = True
@@ -243,9 +246,12 @@ class DSPyMator(TransformerMixin, BaseEstimator):
             estimator.fit(X_train, y_train, optimizer=gepa_optimizer, validation_data=0.2)
             ```
         """
-        self.lm_ = dspy.LM(
-            self.lm, temperature=self.temperature, max_tokens=self.max_tokens
-        )
+        if isinstance(self.lm, dspy.LM):
+            self.lm_ = self.lm
+        else:
+            self.lm_ = dspy.LM(
+                self.lm, temperature=self.temperature, max_tokens=self.max_tokens
+            )
 
         self.input_fields_ = list(self.signature_.input_fields.keys())
 

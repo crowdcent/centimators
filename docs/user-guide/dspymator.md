@@ -247,6 +247,65 @@ multi_input_classifier.fit(movie_data[["title", "review_text", "rating"]], None)
 predictions = multi_input_classifier.predict(movie_data[["title", "review_text", "rating"]])
 ```
 
+### Configuring Language Models
+
+DSPyMator accepts either a model string or a pre-configured `dspy.LM` object for the `lm` parameter.
+
+**Simple usage with model string:**
+
+```python
+# Uses default OpenAI API (requires OPENAI_API_KEY env var)
+classifier = DSPyMator(
+    program=dspy.Predict("text -> label"),
+    target_names="label",
+    lm="openai/gpt-4o-mini",
+    temperature=0.0,
+    max_tokens=1000,
+)
+```
+
+**Using custom providers:**
+
+For custom API configuration, pass a pre-configured `dspy.LM` object. DSPy uses [LiteLLM](https://docs.litellm.ai/) under the hood, so any LiteLLM-supported provider works. Extra kwargs are passed through to LiteLLM:
+
+```python
+import dspy
+
+# Pass a pre-configured LM object
+classifier = DSPyMator(
+    program=dspy.Predict("text -> label"),
+    target_names="label",
+    lm=dspy.LM(
+        "openrouter/anthropic/claude-3-haiku",
+        temperature=0.1,
+        max_tokens=1000,
+        # Additional kwargs are passed to LiteLLM
+    ),
+)
+```
+
+!!! note "Temperature and max_tokens"
+    When passing a `dspy.LM` object, configure `temperature` and `max_tokens` on the LM directly. The DSPyMator parameters are ignored when using a pre-configured LM.
+
+**Environment variables:**
+
+Most providers are configured via environment variables. Set them before calling `fit()`:
+
+```python
+import os
+
+# OpenAI
+os.environ["OPENAI_API_KEY"] = "sk-..."
+
+# OpenRouter
+os.environ["OPENROUTER_API_KEY"] = "sk-or-..."
+
+# Anthropic
+os.environ["ANTHROPIC_API_KEY"] = "sk-ant-..."
+```
+
+See the [DSPy LM documentation](https://dspy.ai/api/models/LM/) and [LiteLLM provider docs](https://docs.litellm.ai/docs/providers) for supported providers and configuration.
+
 ### Async Execution for Speed
 
 By default, DSPyMator uses async execution for faster batch predictions:
@@ -292,3 +351,26 @@ llm_pipeline = make_pipeline(
         feature_names=["reasoning"],                # specify which columns to embed
     )
 ```
+
+## Parameters Reference
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `program` | `dspy.Module` | *required* | DSPy module (e.g., `dspy.Predict`, `dspy.ChainOfThought`) with a signature defining input/output fields |
+| `target_names` | `str \| list[str]` | *required* | Output field name(s) to use as predictions |
+| `feature_names` | `list[str] \| None` | `None` | Column names mapping input data to signature fields. If `None`, inferred from dataframe columns |
+| `lm` | `str \| dspy.LM` | `"openai/gpt-5-nano"` | Language model - either a string identifier or a pre-configured `dspy.LM` object |
+| `temperature` | `float` | `1.0` | Sampling temperature (ignored if `lm` is a `dspy.LM` object) |
+| `max_tokens` | `int` | `16000` | Maximum tokens in responses (ignored if `lm` is a `dspy.LM` object) |
+| `use_async` | `bool` | `True` | Use async execution for batch predictions |
+| `max_concurrent` | `int` | `50` | Maximum concurrent requests in async mode |
+| `verbose` | `bool` | `True` | Show progress bars during prediction |
+
+### fit() Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `X` | DataFrame/array | *required* | Training features |
+| `y` | Series/array | *required* | Target values (can be `None` for unsupervised) |
+| `optimizer` | `dspy.Optimizer \| None` | `None` | DSPy optimizer instance (e.g., `dspy.GEPA`, `dspy.BootstrapFewShot`) |
+| `validation_data` | `tuple \| float \| None` | `None` | Validation data as `(X_val, y_val)`, a float for train split fraction, or `None` |
