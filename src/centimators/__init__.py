@@ -39,6 +39,7 @@ __all__ = [
     "EmbeddingTransformer",
     "DimReducer",
     "FeatureNeutralizer",
+    "FeaturePenalizer",
     # Config helpers
     "set_keras_backend",
     "get_keras_backend",
@@ -59,6 +60,7 @@ _LAZY_IMPORTS = {
     # Feature transformers with optional dependencies
     "EmbeddingTransformer": "centimators.feature_transformers.embedding",
     "DimReducer": "centimators.feature_transformers.dimreduction",
+    "FeaturePenalizer": "centimators.feature_transformers.penalization",
 }
 
 

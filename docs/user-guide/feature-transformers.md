@@ -166,37 +166,73 @@ reduced_features = umap_reducer.fit_transform(X)
 - `tsne`: t-distributed Stochastic Neighbor Embedding (non-linear, stochastic, visualization)
 - `umap`: Uniform Manifold Approximation and Projection (non-linear, balanced, requires `centimators[all]`)
 
-## Pipeline Integration
+## FeatureNeutralizer
 
-All transformers work seamlessly in scikit-learn pipelines with metadata routing:
+In competitions like Numerai, your model's predictions often correlate with specific features—this is called **feature exposure**. High exposure to any single feature can hurt performance when that feature's predictive power shifts over time.
+
+`FeatureNeutralizer` reduces exposure by subtracting a proportion of the linear relationship between your predictions and the features. Think of it as "de-correlating" your signal from known factors.
+
+![Feature Neutralization](../assets/images/neutralization.png)
+
+The chart shows predictions before (coral) and after (cyan) 50% neutralization.
 
 ```python
-from sklearn import set_config
-from sklearn.pipeline import make_pipeline
+from centimators.feature_transformers import FeatureNeutralizer
 
-# Enable metadata routing
-set_config(enable_metadata_routing=True)
-
-# Create pipeline with multiple transformers
-pipeline = make_pipeline(
-    LogReturnTransformer().set_transform_request(ticker_series=True),
-    RankTransformer().set_transform_request(date_series=True),
-    LagTransformer(windows=[1, 5, 10]).set_transform_request(ticker_series=True),
-    MovingAverageTransformer(windows=[5, 20]).set_transform_request(ticker_series=True)
+neutralizer = FeatureNeutralizer(
+    proportion=0.5,  # How much to neutralize [0, 1]
+    pred_name='prediction',
+    feature_names=['feature1', 'feature2', 'feature3']
 )
 
-# Transform data with metadata routing
-transformed = pipeline.fit_transform(
-    df[['close', 'volume']],
-    date_series=df['date'],
-    ticker_series=df['ticker']
+neutralized = neutralizer.fit_transform(
+    df[['prediction']],
+    features=df[['feature1', 'feature2', 'feature3']],
+    era_series=df['era']
 )
+# Output: prediction_neutralized_0.5
 ```
 
-**Metadata Routing:**
+**How it works:**
 
-- `date_series`: Used by `RankTransformer` for cross-sectional ranking
-- `ticker_series`: Used by temporal transformers (`LagTransformer`, `MovingAverageTransformer`, `LogReturnTransformer`) to maintain asset boundaries
+1. Gaussianizes predictions within each era
+2. Fits a linear model: `prediction ~ features`
+3. Subtracts `proportion × exposure` from predictions
+4. Re-normalizes to [0, 1]
+
+**Trade-off:** Higher proportion = less feature exposure, but also potentially less signal. At `proportion=1.0`, you remove all linear relationship with features.
+
+## FeaturePenalizer
+
+!!! note "Requires JAX"
+    This transformer requires JAX. Install with:
+    ```bash
+    uv add 'centimators[keras-jax]'
+    ```
+
+`FeaturePenalizer` takes a different approach: instead of subtracting a fixed proportion, it uses gradient descent to find the *minimal* adjustment that caps all exposures below a threshold.
+
+![Feature Penalization](../assets/images/penalization.png)
+
+The key difference from neutralization: penalization enforces a hard cap (dashed lines at ±0.1). Every cyan bar stays within bounds—the optimizer finds the smallest change needed to achieve this.
+
+```python
+from centimators.feature_transformers import FeaturePenalizer
+
+penalizer = FeaturePenalizer(
+    max_exposure=0.1,  # Cap exposure at ±0.1
+    pred_name='prediction',
+    feature_names=['feature1', 'feature2', 'feature3']
+)
+
+penalized = penalizer.fit_transform(
+    df[['prediction']],
+    features=df[['feature1', 'feature2', 'feature3']],
+    era_series=df['era']
+)
+# Output: prediction_penalized_0.1
+```
+
 
 ## EmbeddingTransformer
 
@@ -260,8 +296,43 @@ embedder = EmbeddingTransformer(
 ```
 
 **Key Features:**
+
 - Supports both hosted (via litellm) and local embedding models
 - Handles null values (fills with zero vectors)
 - Automatically expands embeddings into sklearn-compatible columns
 - Backend-agnostic (works with Polars, Pandas)
 - Configurable batch size and caching for hosted models
+
+## Pipeline Integration
+
+All transformers work seamlessly in scikit-learn pipelines with metadata routing:
+
+```python
+from sklearn import set_config
+from sklearn.pipeline import make_pipeline
+
+# Enable metadata routing
+set_config(enable_metadata_routing=True)
+
+# Create pipeline with multiple transformers
+pipeline = make_pipeline(
+    LogReturnTransformer().set_transform_request(ticker_series=True),
+    RankTransformer().set_transform_request(date_series=True),
+    LagTransformer(windows=[1, 5, 10]).set_transform_request(ticker_series=True),
+    MovingAverageTransformer(windows=[5, 20]).set_transform_request(ticker_series=True)
+)
+
+# Transform data with metadata routing
+transformed = pipeline.fit_transform(
+    df[['close', 'volume']],
+    date_series=df['date'],
+    ticker_series=df['ticker']
+)
+```
+
+**Metadata Routing:**
+
+- `date_series`: Used by `RankTransformer` for cross-sectional ranking
+- `ticker_series`: Used by temporal transformers (`LagTransformer`, `MovingAverageTransformer`, `LogReturnTransformer`) to maintain asset boundaries
+- `era_series`: Used by `FeatureNeutralizer` and `FeaturePenalizer` to process predictions era-by-era
+- `features`: Used by `FeatureNeutralizer` and `FeaturePenalizer` for exposure calculation
