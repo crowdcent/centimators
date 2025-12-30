@@ -24,22 +24,16 @@ class TemperatureAnnealing(callbacks.Callback):
     and linearly decreases to low temperature (sharp routing, more tree-like).
     This can theoretically help training converge to better solutions.
 
-    Parameters
-    ----------
-    ndf : NeuralDecisionForestRegressor
-        The forest instance whose trees will be annealed.
-    start : float, default=2.0
-        Starting temperature (soft routing).
-    end : float, default=0.5
-        Ending temperature (sharp routing).
-    epochs : int, default=50
-        Total epochs over which to anneal. Should match fit() epochs.
+    Args:
+        ndf (NeuralDecisionForestRegressor): The forest instance whose trees will be annealed.
+        start (float, default=2.0): Starting temperature (soft routing).
+        end (float, default=0.5): Ending temperature (sharp routing).
+        epochs (int, default=50): Total epochs over which to anneal. Should match fit() epochs.
 
-    Example
-    -------
-    >>> ndf = NeuralDecisionForestRegressor(temperature=2.0)
-    >>> annealer = TemperatureAnnealing(ndf, start=2.0, end=0.5, epochs=50)
-    >>> ndf.fit(X, y, epochs=50, callbacks=[annealer])
+    Examples:
+        >>> ndf = NeuralDecisionForestRegressor(temperature=2.0)
+        >>> annealer = TemperatureAnnealing(ndf, start=2.0, end=0.5, epochs=50)
+        >>> ndf.fit(X, y, epochs=50, callbacks=[annealer])
     """
 
     def __init__(self, ndf, start: float = 2.0, end: float = 0.5, epochs: int = 50):
@@ -63,43 +57,30 @@ class NeuralDecisionTree(models.Model):
     distribution over left/right routing decisions. The final prediction is a
     weighted combination of leaf node outputs based on the routing probabilities.
 
-    Parameters
-    ----------
-    depth : int
-        Depth of the tree. A tree of depth d has 2^d leaf nodes.
-    num_features : int
-        Number of input features.
-    used_features_rate : float
-        Fraction of features to randomly select and use for this tree (0 to 1).
-        Provides feature bagging similar to random forests.
-    output_units : int, default=1
-        Number of output units (targets to predict).
-    l2_decision : float, default=1e-4
-        L2 regularization strength for routing decision layer.
-        Lower values allow sharper routing decisions.
-    l2_leaf : float, default=1e-3
-        L2 regularization strength for leaf output weights.
-    temperature : float, default=0.5
-        Temperature for sigmoid sharpness. Lower = sharper routing (more tree-like),
-        higher = softer routing (more like weighted average of leaves).
-    rng : np.random.Generator | None, default=None
-        Random number generator for reproducible feature mask sampling.
+    Args:
+        depth (int): Depth of the tree. A tree of depth d has 2^d leaf nodes.
+        num_features (int): Number of input features.
+        used_features_rate (float): Fraction of features to randomly select and use
+            for this tree (0 to 1). Provides feature bagging similar to random forests.
+        output_units (int, default=1): Number of output units (targets to predict).
+        l2_decision (float, default=1e-4): L2 regularization strength for routing
+            decision layer. Lower values allow sharper routing decisions.
+        l2_leaf (float, default=1e-3): L2 regularization strength for leaf output weights.
+        temperature (float, default=0.5): Temperature for sigmoid sharpness.
+            Lower = sharper routing (more tree-like), higher = softer routing
+            (more like weighted average of leaves).
+        rng (np.random.Generator | None, default=None): Random number generator
+            for reproducible feature mask sampling.
 
-    Attributes
-    ----------
-    num_leaves : int
-        Number of leaf nodes = 2^depth
-    used_features_mask : Tensor
-        Binary mask indicating which features this tree uses
-    pi : Tensor
-        Learned output values for each leaf node, shape (num_leaves, output_units)
-    decision_fn : Dense layer
-        Learns routing logits for all internal nodes
+    Attributes:
+        num_leaves (int): Number of leaf nodes = 2^depth
+        used_features_mask (Tensor): Binary mask indicating which features this tree uses
+        pi (Tensor): Learned output values for each leaf node, shape (num_leaves, output_units)
+        decision_fn (Dense layer): Learns routing logits for all internal nodes
 
-    Notes
-    -----
-    The tree traversal uses breadth-first order. At each level, routing probabilities
-    are computed and multiplied to give the final probability of reaching each leaf.
+    Note:
+        The tree traversal uses breadth-first order. At each level, routing probabilities
+        are computed and multiplied to give the final probability of reaching each leaf.
     """
 
     def __init__(
@@ -213,6 +194,7 @@ class NeuralDecisionForestRegressor(RegressorMixin, BaseKerasEstimator):
     The forest combines predictions by averaging over all trees.
 
     This architecture provides:
+
     - Interpretable tree-like structure with learned routing
     - Feature bagging via used_features_rate (like random forests)
     - End-to-end differentiable training
@@ -220,84 +202,62 @@ class NeuralDecisionForestRegressor(RegressorMixin, BaseKerasEstimator):
     - Temperature-controlled routing sharpness
     - Input noise, per-tree noise, and tree dropout for ensemble diversity
 
-    Parameters
-    ----------
-    num_trees : int, default=25
-        Number of decision trees in the forest ensemble.
-    depth : int, default=4
-        Depth of each tree. Each tree will have 2^depth leaf nodes.
-        Deeper trees have more capacity but harder gradient flow.
-    used_features_rate : float, default=0.5
-        Fraction of features each tree randomly selects (0 to 1).
-        Provides feature bagging. Lower values increase diversity.
-    l2_decision : float, default=1e-4
-        L2 regularization for routing decision layers.
-        Lower values allow sharper routing decisions.
-    l2_leaf : float, default=1e-3
-        L2 regularization for leaf output weights.
-        Can be stronger than l2_decision since leaves are regression weights.
-    temperature : float, default=0.5
-        Temperature for sigmoid sharpness in routing. Lower values (0.3-0.5)
-        give sharper, more tree-like routing. Higher values (1-3) give softer
-        routing where samples flow through multiple paths.
-    input_noise_std : float, default=0.0
-        Gaussian noise std applied to inputs before trunk.
-        Makes trunk robust to input perturbations. Try 0.02-0.05.
-    tree_noise_std : float, default=0.0
-        Gaussian noise std applied per-tree after trunk.
-        Each tree sees a different noisy view, decorrelating the ensemble.
-        Try 0.03-0.1.
-    tree_dropout_rate : float, default=0.0
-        Dropout rate for tree outputs during training (0 to 1).
-        Randomly drops tree contributions to decorrelate ensemble.
-    trunk_units : list[int] | None, default=None
-        Hidden layer sizes for optional shared MLP trunk before trees.
-        E.g. [64, 64] adds two Dense+ReLU layers. Trees then split on
-        learned features instead of raw columns.
-    random_state : int | None, default=None
-        Random seed for reproducible feature mask sampling across trees.
-    output_units : int, default=1
-        Number of output targets to predict.
-    optimizer : Type[keras.optimizers.Optimizer], default=Adam
-        Keras optimizer class to use for training.
-    learning_rate : float, default=0.001
-        Learning rate for the optimizer.
-    loss_function : str, default="mse"
-        Loss function for training.
-    metrics : list[str] | None, default=None
-        List of metrics to track during training.
-    distribution_strategy : str | None, default=None
-        Distribution strategy for multi-device training.
+    Args:
+        num_trees (int, default=25): Number of decision trees in the forest ensemble.
+        depth (int, default=4): Depth of each tree. Each tree will have 2^depth leaf nodes.
+            Deeper trees have more capacity but harder gradient flow.
+        used_features_rate (float, default=0.5): Fraction of features each tree randomly
+            selects (0 to 1). Provides feature bagging. Lower values increase diversity.
+        l2_decision (float, default=1e-4): L2 regularization for routing decision layers.
+            Lower values allow sharper routing decisions.
+        l2_leaf (float, default=1e-3): L2 regularization for leaf output weights.
+            Can be stronger than l2_decision since leaves are regression weights.
+        temperature (float, default=0.5): Temperature for sigmoid sharpness in routing.
+            Lower values (0.3-0.5) give sharper, more tree-like routing. Higher values
+            (1-3) give softer routing where samples flow through multiple paths.
+        input_noise_std (float, default=0.0): Gaussian noise std applied to inputs
+            before trunk. Makes trunk robust to input perturbations. Try 0.02-0.05.
+        tree_noise_std (float, default=0.0): Gaussian noise std applied per-tree after
+            trunk. Each tree sees a different noisy view, decorrelating the ensemble.
+            Try 0.03-0.1.
+        tree_dropout_rate (float, default=0.0): Dropout rate for tree outputs during
+            training (0 to 1). Randomly drops tree contributions to decorrelate ensemble.
+        trunk_units (list[int] | None, default=None): Hidden layer sizes for optional
+            shared MLP trunk before trees. E.g. [64, 64] adds two Dense+ReLU layers.
+            Trees then split on learned features instead of raw columns.
+        random_state (int | None, default=None): Random seed for reproducible feature
+            mask sampling across trees.
+        output_units (int, default=1): Number of output targets to predict.
+        optimizer (Type[keras.optimizers.Optimizer], default=Adam): Keras optimizer
+            class to use for training.
+        learning_rate (float, default=0.001): Learning rate for the optimizer.
+        loss_function (str, default="mse"): Loss function for training.
+        metrics (list[str] | None, default=None): List of metrics to track during training.
+        distribution_strategy (str | None, default=None): Distribution strategy for
+            multi-device training.
 
-    Attributes
-    ----------
-    model : keras.Model
-        The compiled Keras model containing the ensemble of trees.
-    trees : list[NeuralDecisionTree]
-        List of tree models in the ensemble.
+    Attributes:
+        model (keras.Model): The compiled Keras model containing the ensemble of trees.
+        trees (list[NeuralDecisionTree]): List of tree models in the ensemble.
 
-    Examples
-    --------
-    >>> from centimators.model_estimators import NeuralDecisionForestRegressor
-    >>> import numpy as np
-    >>> X = np.random.randn(100, 10).astype('float32')
-    >>> y = np.random.randn(100, 1).astype('float32')
-    >>> ndf = NeuralDecisionForestRegressor(num_trees=5, depth=4)
-    >>> ndf.fit(X, y, epochs=10, verbose=0)
-    >>> predictions = ndf.predict(X)
+    Examples:
+        >>> from centimators.model_estimators import NeuralDecisionForestRegressor
+        >>> import numpy as np
+        >>> X = np.random.randn(100, 10).astype('float32')
+        >>> y = np.random.randn(100, 1).astype('float32')
+        >>> ndf = NeuralDecisionForestRegressor(num_trees=5, depth=4)
+        >>> ndf.fit(X, y, epochs=10, verbose=0)
+        >>> predictions = ndf.predict(X)
 
-    Notes
-    -----
-    - Larger depth increases model capacity but may lead to overfitting
-    - More trees generally improve performance but increase computation
-    - Lower used_features_rate increases diversity but may hurt individual tree performance
-    - Works well on tabular data where tree-based methods traditionally excel
-    - Lower temperature (0.3-0.5) gives sharper, more tree-like routing
+    Note:
+        - Larger depth increases model capacity but may lead to overfitting
+        - More trees generally improve performance but increase computation
+        - Lower used_features_rate increases diversity but may hurt individual tree performance
+        - Works well on tabular data where tree-based methods traditionally excel
+        - Lower temperature (0.3-0.5) gives sharper, more tree-like routing
 
-    References
-    ----------
-    The approach is based on Neural Decision Forests and related differentiable
-    tree architectures that enable end-to-end learning of routing decisions.
+        The approach is based on Neural Decision Forests and related differentiable
+        tree architectures that enable end-to-end learning of routing decisions.
     """
 
     num_trees: int = 25
@@ -326,10 +286,8 @@ class NeuralDecisionForestRegressor(RegressorMixin, BaseKerasEstimator):
         for robustness), per-tree noise (for diversity), tree dropout, and
         a shared MLP trunk.
 
-        Returns
-        -------
-        self
-            Returns self for method chaining.
+        Returns:
+            self: Returns self for method chaining.
         """
         if self.model is None:
             if self.distribution_strategy:

@@ -27,26 +27,20 @@ from centimators.narwhals_utils import _ensure_numpy
 class BaseKerasEstimator(TransformerMixin, BaseEstimator, ABC):
     """Meta-estimator for Keras models following the scikit-learn API.
 
-    Parameters
-    ----------
-    output_units : int, default=1
-        Number of output units in the final layer.
-    optimizer : Type[optimizers.Optimizer], default=Adam
-        Keras optimizer class to use for training.
-    learning_rate : float, default=0.001
-        Learning rate for the optimizer.
-    loss_function : str, default="mse"
-        Loss function name passed to model.compile().
-    metrics : list[str] | None, default=None
-        List of metric names to track during training.
-    model : Any, default=None
-        The underlying Keras model (populated by build_model).
-    distribution_strategy : str | None, default=None
-        If set, enables DataParallel distribution for multi-device training.
-    target_scaler : sklearn transformer | None, default=None
-        Scaler for target values. Neural networks converge better when
-        targets are normalized. Subclasses may override the default
-        (e.g., regressors default to StandardScaler).
+    Args:
+        output_units (int, default=1): Number of output units in the final layer.
+        optimizer (Type[optimizers.Optimizer], default=Adam): Keras optimizer class
+            to use for training.
+        learning_rate (float, default=0.001): Learning rate for the optimizer.
+        loss_function (str, default="mse"): Loss function name passed to model.compile().
+        metrics (list[str] | None, default=None): List of metric names to track
+            during training.
+        model (Any, default=None): The underlying Keras model (populated by build_model).
+        distribution_strategy (str | None, default=None): If set, enables DataParallel
+            distribution for multi-device training.
+        target_scaler (sklearn transformer | None, default=None): Scaler for target
+            values. Neural networks converge better when targets are normalized.
+            Subclasses may override the default (e.g., regressors default to StandardScaler).
     """
 
     output_units: int = 1
