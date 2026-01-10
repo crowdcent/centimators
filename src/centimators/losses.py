@@ -16,8 +16,9 @@ Highlights:
 import keras.ops as K
 from keras.losses import Loss
 from keras.config import epsilon
+from keras.saving import register_keras_serializable
 
-
+@register_keras_serializable()
 class SpearmanCorrelation(Loss):
     """Differentiable Spearman rank correlation loss.
 
