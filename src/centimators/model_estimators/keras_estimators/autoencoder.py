@@ -93,6 +93,8 @@ class BottleneckEncoder(BaseKerasEstimator):
         batch_size: int = 32,
         validation_data: tuple[Any, Any] | None = None,
         callbacks: list[Any] | None = None,
+        verbose: int = 1,
+        sample_weight: Any | None = None,
         **kwargs: Any,
     ) -> "BottleneckEncoder":
         self._n_features_in_ = X.shape[1]
@@ -124,24 +126,32 @@ class BottleneckEncoder(BaseKerasEstimator):
             epochs=epochs,
             validation_data=validation_data,
             callbacks=callbacks,
+            verbose=verbose,
+            sample_weight=sample_weight,
             **kwargs,
         )
 
         self._is_fitted = True
         return self
 
-    def predict(self, X, batch_size: int = 512, **kwargs: Any) -> Any:
+    def predict(self, X, batch_size: int = 512, verbose: int = 1, **kwargs: Any) -> Any:
         if not self.model:
             raise ValueError("Model not built. Call 'fit' first.")
         X_np = _ensure_numpy(X)
-        predictions = self.model.predict(X_np, batch_size=batch_size, **kwargs)
+        predictions = self.model.predict(
+            X_np, batch_size=batch_size, verbose=verbose, **kwargs
+        )
         return predictions[1] if isinstance(predictions, list) else predictions
 
-    def transform(self, X, batch_size: int = 512, **kwargs: Any) -> Any:
+    def transform(
+        self, X, batch_size: int = 512, verbose: int = 1, **kwargs: Any
+    ) -> Any:
         if not self.encoder:
             raise ValueError("Encoder not built. Call 'fit' first.")
         X_np = _ensure_numpy(X)
-        return self.encoder.predict(X_np, batch_size=batch_size, **kwargs)
+        return self.encoder.predict(
+            X_np, batch_size=batch_size, verbose=verbose, **kwargs
+        )
 
     def fit_transform(self, X, y, **kwargs) -> Any:
         return self.fit(X, y, **kwargs).transform(X)

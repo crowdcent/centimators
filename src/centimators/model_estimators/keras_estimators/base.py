@@ -68,6 +68,8 @@ class BaseKerasEstimator(TransformerMixin, BaseEstimator, ABC):
         batch_size: int = 32,
         validation_data: tuple[Any, Any] | None = None,
         callbacks: list[Any] | None = None,
+        verbose: int = 1,
+        sample_weight: Any | None = None,
         **kwargs: Any,
     ) -> "BaseKerasEstimator":
         self._n_features_in_ = X.shape[1]
@@ -107,18 +109,20 @@ class BaseKerasEstimator(TransformerMixin, BaseEstimator, ABC):
             epochs=epochs,
             validation_data=validation_data,
             callbacks=callbacks,
+            verbose=verbose,
+            sample_weight=sample_weight,
             **kwargs,
         )
         self._is_fitted = True
         return self
 
     @nw.narwhalify
-    def predict(self, X, batch_size: int = 512, **kwargs: Any) -> Any:
+    def predict(self, X, batch_size: int = 512, verbose: int = 1, **kwargs: Any) -> Any:
         if not self.model:
             raise ValueError("Model not built. Call `build_model` first.")
 
         predictions = self.model.predict(
-            _ensure_numpy(X), batch_size=batch_size, **kwargs
+            _ensure_numpy(X), batch_size=batch_size, verbose=verbose, **kwargs
         )
 
         # Inverse transform predictions back to original scale

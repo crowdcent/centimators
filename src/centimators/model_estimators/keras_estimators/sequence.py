@@ -41,19 +41,33 @@ class SequenceEstimator(BaseKerasEstimator):
         return X_reshaped, validation_data
 
     def fit(
-        self, X, y, validation_data: tuple[Any, Any] | None = None, **kwargs: Any
+        self,
+        X,
+        y,
+        epochs: int = 100,
+        batch_size: int = 32,
+        validation_data: tuple[Any, Any] | None = None,
+        callbacks: list[Any] | None = None,
+        verbose: int = 1,
+        sample_weight: Any | None = None,
+        **kwargs: Any,
     ) -> "SequenceEstimator":
         X_reshaped, validation_data_reshaped = self._reshape(X, validation_data)
         super().fit(
             X_reshaped,
             y=_ensure_numpy(y),
+            epochs=epochs,
+            batch_size=batch_size,
             validation_data=validation_data_reshaped,
+            callbacks=callbacks,
+            verbose=verbose,
+            sample_weight=sample_weight,
             **kwargs,
         )
         return self
 
     @nw.narwhalify
-    def predict(self, X, batch_size: int = 512, **kwargs: Any) -> Any:
+    def predict(self, X, batch_size: int = 512, verbose: int = 1, **kwargs: Any) -> Any:
         if not self.model:
             raise ValueError("Model not built. Call `build_model` first.")
 
@@ -62,7 +76,7 @@ class SequenceEstimator(BaseKerasEstimator):
         X_reshaped, _ = self._reshape(X)
 
         predictions = self.model.predict(
-            _ensure_numpy(X_reshaped), batch_size=batch_size, **kwargs
+            _ensure_numpy(X_reshaped), batch_size=batch_size, verbose=verbose, **kwargs
         )
 
         # Inverse transform predictions back to original scale

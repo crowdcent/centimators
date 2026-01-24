@@ -539,3 +539,37 @@ def test_predict_output_types():
     pred_multi_pl = est_multi.predict(X_pl)
     assert isinstance(pred_multi_pl, pl.DataFrame)
     assert pred_multi_pl.columns == ["prediction_0", "prediction_1"]
+
+
+def test_sklearn_metadata_routing():
+    """Test that estimators work with sklearn metadata routing in pipelines."""
+    from sklearn import set_config
+    from sklearn.pipeline import Pipeline
+
+    set_config(enable_metadata_routing=True)
+
+    rng = np.random.default_rng(42)
+    seq_length, n_features_per_step = 3, 2
+    n_samples = 15
+
+    X = rng.standard_normal((n_samples, seq_length * n_features_per_step)).astype(
+        "float32"
+    )
+    y = rng.standard_normal((n_samples, 1)).astype("float32")
+
+    est = (
+        LSTMRegressor(
+            lstm_units=[(4, 0.0, 0.0)],
+            lag_windows=list(range(seq_length)),
+            n_features_per_timestep=n_features_per_step,
+            output_units=1,
+        )
+        .set_fit_request(epochs=True, verbose=True)
+        .set_predict_request(verbose=True)
+    )
+
+    pipeline = Pipeline([("model", est)])
+    pipeline.fit(X, y, epochs=1, verbose=0)
+
+    preds = pipeline.predict(X, verbose=0)
+    assert preds.shape == (n_samples, 1)

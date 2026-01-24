@@ -7,6 +7,7 @@ This module provides KerasCortex, a scikit-learn compatible meta-estimator.
 
 import inspect
 import types
+from typing import Any
 
 from sklearn.base import BaseEstimator, RegressorMixin, clone
 
@@ -141,13 +142,29 @@ class KerasCortex(RegressorMixin, BaseEstimator):
 
         return best_model, performance_log
 
-    def fit(self, X, y, validation_data=None, **kwargs):
+    def fit(
+        self,
+        X,
+        y,
+        epochs: int = 100,
+        batch_size: int = 32,
+        validation_data: tuple[Any, Any] | None = None,
+        callbacks: list[Any] | None = None,
+        verbose: int = 1,
+        sample_weight: Any | None = None,
+        **kwargs: Any,
+    ) -> "KerasCortex":
         self.best_model_, self.performance_log_ = self.think_loop(
             base_estimator=self.base_estimator,
             X=X,
             y=y,
             validation_data=validation_data,
             n_iterations=self.n_iterations,
+            epochs=epochs,
+            batch_size=batch_size,
+            callbacks=callbacks,
+            verbose=verbose,
+            sample_weight=sample_weight,
             **kwargs,
         )
         return self
