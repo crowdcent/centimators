@@ -15,6 +15,7 @@ from sklearn.preprocessing import StandardScaler
 
 from .base import BaseKerasEstimator
 from keras import layers, models, ops as K, regularizers, callbacks, initializers
+from keras.saving import register_keras_serializable
 
 
 class TemperatureAnnealing(callbacks.Callback):
@@ -49,6 +50,7 @@ class TemperatureAnnealing(callbacks.Callback):
             tree.temperature.assign(t)
 
 
+@register_keras_serializable(package="centimators")
 class NeuralDecisionTree(models.Model):
     """A differentiable decision tree with stochastic routing.
 
@@ -93,11 +95,18 @@ class NeuralDecisionTree(models.Model):
         l2_leaf=1e-3,
         temperature=0.5,
         rng=None,
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
+        # Store config params for serialization
         self.depth = depth
+        self.num_features = num_features
+        self.used_features_rate = used_features_rate
         self.num_leaves = 2**depth
         self.output_units = output_units
+        self.l2_decision = l2_decision
+        self.l2_leaf = l2_leaf
+        self._init_temperature = temperature  # Store initial value for get_config
 
         # Create a mask for the randomly selected features
         num_used_features = max(1, int(round(num_features * used_features_rate)))
@@ -129,9 +138,7 @@ class NeuralDecisionTree(models.Model):
         self.temperature = self.add_weight(
             name="temperature",
             shape=(),
-            initializer=lambda shape, dtype: K.convert_to_tensor(
-                temperature, dtype=dtype
-            ),
+            initializer=initializers.Constant(temperature),
             trainable=False,
         )
 
@@ -144,6 +151,21 @@ class NeuralDecisionTree(models.Model):
             if l2_decision > 0
             else None,
         )
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "depth": self.depth,
+                "num_features": self.num_features,
+                "used_features_rate": self.used_features_rate,
+                "output_units": self.output_units,
+                "l2_decision": self.l2_decision,
+                "l2_leaf": self.l2_leaf,
+                "temperature": self._init_temperature,
+            }
+        )
+        return config
 
     def call(self, features):
         batch_size = K.shape(features)[0]
