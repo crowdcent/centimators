@@ -16,8 +16,10 @@ Highlights:
 import keras.ops as K
 from keras.losses import Loss
 from keras.config import epsilon
+from keras.saving import register_keras_serializable
 
 
+@register_keras_serializable(package="centimators")
 class SpearmanCorrelation(Loss):
     """Differentiable Spearman rank correlation loss.
 
@@ -114,7 +116,13 @@ class SpearmanCorrelation(Loss):
 
         return numerator / denominator
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({"regularization_strength": self.regularization_strength})
+        return config
 
+
+@register_keras_serializable(package="centimators")
 class CombinedLoss(Loss):
     """Weighted combination of MSE and Spearman correlation losses.
 
@@ -168,3 +176,14 @@ class CombinedLoss(Loss):
         spearman = self.spearman_loss(y_true, y_pred)
 
         return self.mse_weight * mse + self.spearman_weight * spearman
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "mse_weight": self.mse_weight,
+                "spearman_weight": self.spearman_weight,
+                "spearman_regularization": self.spearman_loss.regularization_strength,
+            }
+        )
+        return config
