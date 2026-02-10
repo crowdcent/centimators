@@ -14,6 +14,7 @@ __all__ = [
     "MLPRegressor",
     "BottleneckEncoder",
     "LSTMRegressor",
+    "TransformerRegressor",
     "NeuralDecisionForestRegressor",
     "TemperatureAnnealing",
     # DSPy estimator
@@ -29,6 +30,7 @@ _LAZY_IMPORTS: dict[str, str] = {
     "MLPRegressor": "centimators.model_estimators.keras_estimators.dense",
     "BottleneckEncoder": "centimators.model_estimators.keras_estimators.autoencoder",
     "LSTMRegressor": "centimators.model_estimators.keras_estimators.sequence",
+    "TransformerRegressor": "centimators.model_estimators.keras_estimators.transformer",
     "NeuralDecisionForestRegressor": "centimators.model_estimators.keras_estimators.tree",
     "TemperatureAnnealing": "centimators.model_estimators.keras_estimators.tree",
     # DSPy estimator

@@ -11,6 +11,7 @@ import pytest
 from centimators.model_estimators import (
     MLPRegressor,
     LSTMRegressor,
+    TransformerRegressor,
     BottleneckEncoder,
     NeuralDecisionForestRegressor,
 )
@@ -573,3 +574,51 @@ def test_sklearn_metadata_routing():
 
     preds = pipeline.predict(X, verbose=0)
     assert preds.shape == (n_samples, 1)
+
+
+def test_transformer_regressor_fit_predict():
+    """TransformerRegressor should fit and produce expected output shape."""
+    rng = np.random.default_rng(7)
+    seq_length = 4
+    n_features_per_step = 5
+    n_samples = 18
+    X = rng.standard_normal((n_samples, seq_length * n_features_per_step)).astype(
+        "float32"
+    )
+    y = rng.standard_normal((n_samples, 1)).astype("float32")
+
+    est = TransformerRegressor(
+        lag_windows=list(range(seq_length)),
+        n_features_per_timestep=n_features_per_step,
+        output_units=1,
+        d_model=16,
+        ff_dim=64,
+        num_blocks=1,
+        attention_type="temporal",
+    )
+    est.fit(X, y, epochs=1, batch_size=6, verbose=0)
+    preds = est.predict(X, batch_size=6, verbose=0)
+    assert preds.shape == (n_samples, 1)
+
+
+@pytest.mark.parametrize("attention_type", ["temporal", "feature", "cross"])
+def test_transformer_attention_types(attention_type):
+    """TransformerRegressor supports all attention backends."""
+    rng = np.random.default_rng(9)
+    seq_length = 3
+    n_features_per_step = 4
+    X = rng.standard_normal((12, seq_length * n_features_per_step)).astype("float32")
+    y = rng.standard_normal((12, 1)).astype("float32")
+
+    est = TransformerRegressor(
+        lag_windows=list(range(seq_length)),
+        n_features_per_timestep=n_features_per_step,
+        output_units=1,
+        d_model=16,
+        ff_dim=32,
+        num_blocks=1,
+        attention_type=attention_type,
+    )
+    est.fit(X, y, epochs=1, batch_size=4, verbose=0)
+    preds = est.predict(X, batch_size=4, verbose=0)
+    assert preds.shape == (12, 1)
