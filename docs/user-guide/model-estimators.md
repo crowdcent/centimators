@@ -202,6 +202,50 @@ lstm.fit(X_lagged, y, epochs=50, batch_size=32)
 predictions = lstm.predict(X_lagged)
 ```
 
+### TransformerRegressor
+
+`centimators.model_estimators.TransformerRegressor` applies transformer encoder blocks over lagged sequence inputs. It supports three attention modes — temporal (standard self-attention over timesteps), feature (iTransformer-style attention over features), and cross (dual-axis temporal + feature attention) — and two pooling strategies for collapsing the sequence dimension before the final MLP head.
+
+```python
+from centimators.model_estimators import TransformerRegressor
+from centimators.feature_transformers import LagTransformer
+
+# Create lagged features
+lag_transformer = LagTransformer(windows=[1, 2, 3, 4, 5])
+X_lagged = lag_transformer.fit_transform(X, ticker_series=tickers)
+
+# Create Transformer model
+transformer = TransformerRegressor(
+    lag_windows=[1, 2, 3, 4, 5],       # Must match lag transformer
+    n_features_per_timestep=2,          # e.g., price and volume
+    d_model=32,                         # Embedding dimension
+    num_heads=4,                        # Attention heads
+    ff_dim=128,                         # Feed-forward inner dimension
+    num_blocks=2,                       # Stacked encoder blocks
+    attention_type="temporal",          # "temporal", "feature", or "cross"
+    pooling_type="attention",           # "attention" (learned) or "average"
+    use_pre_norm=True,                  # Pre-LayerNorm (more stable training)
+    mlp_units=(64,),                    # MLP head after pooling
+    dropout_rate=0.1,
+    learning_rate=0.001,
+)
+
+# Fit and predict
+transformer.fit(X_lagged, y, epochs=50, batch_size=32)
+predictions = transformer.predict(X_lagged)
+```
+
+#### Key parameters
+
+- `d_model` (int): Dimension of the internal embedding space (default: 32)
+- `num_heads` (int): Number of attention heads (default: 4)
+- `ff_dim` (int): Hidden dimension of the feed-forward network in each encoder block (default: 128)
+- `num_blocks` (int): Number of stacked encoder blocks (default: 1)
+- `attention_type` (str): `"temporal"` for standard self-attention over timesteps, `"feature"` for iTransformer-style attention over features, or `"cross"` for dual-axis (temporal + feature) attention
+- `pooling_type` (str): `"attention"` for learned weighted pooling or `"average"` for global average pooling
+- `use_pre_norm` (bool): Apply LayerNorm before attention/FFN rather than after (default: True)
+- `mlp_units` (tuple[int, ...]): Hidden layer sizes for the prediction head after pooling (default: (64,))
+
 
 ## Loss Functions
 

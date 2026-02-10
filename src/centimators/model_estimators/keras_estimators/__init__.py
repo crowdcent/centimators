@@ -12,6 +12,12 @@ from .base import BaseKerasEstimator
 from .dense import MLPRegressor
 from .autoencoder import BottleneckEncoder
 from .sequence import SequenceEstimator, LSTMRegressor
+from .transformer import (
+    AttentionPooling,
+    CrossAttention,
+    PositionEmbedding,
+    TransformerRegressor,
+)
 from .tree import NeuralDecisionForestRegressor, TemperatureAnnealing
 
 __all__ = [
@@ -20,6 +26,10 @@ __all__ = [
     "BottleneckEncoder",
     "SequenceEstimator",
     "LSTMRegressor",
+    "TransformerRegressor",
+    "PositionEmbedding",
+    "CrossAttention",
+    "AttentionPooling",
     "NeuralDecisionForestRegressor",
     "TemperatureAnnealing",
 ]

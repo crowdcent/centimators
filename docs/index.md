@@ -21,7 +21,7 @@
 
 -   :material-ruler: **Model Estimators**
     
-    Keras 3 estimators with scikit-learn API (MLP, BottleneckEncoder, LSTM, and more) + custom losses.
+    Keras 3 estimators with scikit-learn API (MLP, BottleneckEncoder, LSTM, Transformer, and more) + custom losses.
     
     [User Guide](user-guide/model-estimators.md) · [Losses](api-reference/losses.md) · [API](api-reference/model_estimators.md)
 
