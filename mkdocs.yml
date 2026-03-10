@@ -27,7 +27,6 @@ nav:
           - KerasCortex: api-reference/keras_cortex.md
 theme:
   name: material
-  custom_dir: docs/overrides
   logo: assets/images/logo-nav.svg
   favicon: assets/images/cc_logo.png
   palette:
@@ -77,7 +76,7 @@ theme:
   language: en
 
 extra_css:
-  - overrides/assets/stylesheets/extra.css
+  - assets/stylesheets/extra.css
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -120,7 +119,7 @@ plugins:
           - "hide-output"
 
 extra_javascript:
-    - "overrides/assets/js/runllm-widget.js"
+    - "assets/js/runllm-widget.js"
 
 extra:
   social:

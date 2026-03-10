@@ -39,7 +39,7 @@ FEATURES = [
     "liquidity",
     "beta",
 ]
-OUTPUT_DIR = "overrides/assets/images"
+OUTPUT_DIR = "docs/assets/images"
 
 
 def compute_exposure(predictions: np.ndarray, features: np.ndarray) -> np.ndarray:

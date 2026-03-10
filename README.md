@@ -1,4 +1,4 @@
-<img src="https://raw.githubusercontent.com/crowdcent/centimators/main/docs/overrides/assets/images/centimators_banner_transparent_thinner.png" alt="Centimators" width="100%" style="max-width: 800px;"/>
+<img src="https://raw.githubusercontent.com/crowdcent/centimators/main/docs/assets/images/centimators_banner_transparent_thinner.png" alt="Centimators" width="100%" style="max-width: 800px;"/>
 
 # Centimators: essential data transformers and model estimators for ML and data science competitions
 
@@ -113,7 +113,7 @@ Both `result_pd` (from Pandas) and `result_pl` (from Polars) will contain the sa
 
 `centimators` transformers are designed to work seamlessly within scikit-learn Pipelines, leveraging its metadata routing capabilities. This allows you to pass data like date or ticker series through the pipeline to the specific transformers that need them, while also chaining together multiple transformers. This is useful for building more complex feature pipelines, but also allows for better cross-validation, hyperparameter tuning, and model selection. For example, if you add a Regressor at the end of the pipeline, you can imagine searching over various combinations of lags, moving average windows, and model hyperparameters during the training process.
 
-![output_chart](https://raw.githubusercontent.com/crowdcent/centimators/main/docs/overrides/assets/images/pipeline_output_example.png)
+![output_chart](https://raw.githubusercontent.com/crowdcent/centimators/main/docs/assets/images/pipeline_output_example.png)
 ```python
 from sklearn import set_config
 from sklearn.pipeline import make_pipeline
@@ -146,7 +146,7 @@ feature_pipeline = make_pipeline(
     log_return_transformer, ranker, lagger, ma_transformer
 )
 ```
-![centimators_pipeline](https://raw.githubusercontent.com/crowdcent/centimators/main/docs/overrides/assets/images/centimators_pipeline.png)
+![centimators_pipeline](https://raw.githubusercontent.com/crowdcent/centimators/main/docs/assets/images/centimators_pipeline.png)
 
 **Explanation:**
 
@@ -172,7 +172,7 @@ transformed_df = feature_pipeline.fit_transform(
 ```
 
 We can take a closer look at a sample output for a single ticker and for a single initial feature. This clearly shows how the close price for a cross-sectional dataset is transformed into a log return, ranked (between 0 and 1) by date, and smoothed (moving average windows) by ticker:
-![feature_example](https://raw.githubusercontent.com/crowdcent/centimators/main/docs/overrides/assets/images/feature_example.png)
+![feature_example](https://raw.githubusercontent.com/crowdcent/centimators/main/docs/assets/images/feature_example.png)
 
 ## End-to-End Pipeline with an Estimator
 
@@ -206,6 +206,6 @@ mlp_pipeline.fit(
 )
 ```
 
-![centimators_pipeline_estimator](https://raw.githubusercontent.com/crowdcent/centimators/main/docs/overrides/assets/images/centimators_pipeline_estimator.png)
+![centimators_pipeline_estimator](https://raw.githubusercontent.com/crowdcent/centimators/main/docs/assets/images/centimators_pipeline_estimator.png)
 
 Just as before, scikit-learn's *metadata routing* ensures that auxiliary inputs (`date_series`, `ticker_series`, `epochs`) are forwarded only to the steps that explicitly requested them.
