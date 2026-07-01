@@ -10,6 +10,7 @@ from centimators.feature_transformers import (
     MovingAverageTransformer,
     LogReturnTransformer,
     GroupStatsTransformer,
+    DimReducer,
 )
 
 # EmbeddingTransformer import with optional dependency check
@@ -247,3 +248,66 @@ def test_embedding_transformer_get_feature_names_out():
 
     feature_names = transformer.get_feature_names_out()
     assert feature_names == ["text_embed_0", "text_embed_1", "text_embed_2"]
+
+
+def _make_reduction_frame():
+    rng = np.random.default_rng(0)
+    return pl.DataFrame({f"f{i}": rng.standard_normal(20) for i in range(5)})
+
+
+def test_dimreducer_default_prefix_backward_compat():
+    """Default prefix must remain ``dim`` (locks 0.3.x column names)."""
+    df = _make_reduction_frame()
+    reducer = DimReducer(method="pca", n_components=2)
+    reduced = reducer.fit_transform(df)
+    assert reduced.columns == ["dim_0", "dim_1"]
+
+
+def test_dimreducer_custom_prefix():
+    df = _make_reduction_frame()
+    reducer = DimReducer(method="pca", n_components=3, prefix="emb_thesis")
+    reduced = reducer.fit_transform(df)
+    assert reduced.columns == ["emb_thesis_0", "emb_thesis_1", "emb_thesis_2"]
+
+
+def test_dimreducer_get_feature_names_out_matches_transform():
+    df = _make_reduction_frame()
+    for prefix in ("dim", "emb_thesis"):
+        reducer = DimReducer(method="pca", n_components=2, prefix=prefix)
+        reduced = reducer.fit_transform(df)
+        assert reducer.get_feature_names_out() == reduced.columns
+
+
+def test_dimreducer_invalid_method_raises_at_construction():
+    """Invalid method must fail eagerly in __init__, not at fit."""
+    with pytest.raises(ValueError, match="method must be one of"):
+        DimReducer(method="not_a_method")
+
+
+def test_dimreducer_pandas_backend():
+    """Transformer is backend-agnostic (narwhals)."""
+    pd = pytest.importorskip("pandas")
+    df = pd.DataFrame(
+        {f"f{i}": np.random.default_rng(1).standard_normal(20) for i in range(4)}
+    )
+    reducer = DimReducer(method="pca", n_components=2, prefix="p")
+    reduced = reducer.fit_transform(df)
+    assert list(reduced.columns) == ["p_0", "p_1"]
+    assert len(reduced) == 20
+
+
+def test_dimreducer_tsne():
+    df = _make_reduction_frame()
+    reducer = DimReducer(method="tsne", n_components=2, perplexity=5.0, random_state=0)
+    reduced = reducer.fit_transform(df)
+    assert reduced.columns == ["dim_0", "dim_1"]
+    assert len(reduced) == 20
+
+
+def test_dimreducer_umap():
+    pytest.importorskip("umap")
+    df = _make_reduction_frame()
+    reducer = DimReducer(method="umap", n_components=2, random_state=0)
+    reduced = reducer.fit_transform(df)
+    assert reduced.columns == ["dim_0", "dim_1"]
+    assert len(reduced) == 20

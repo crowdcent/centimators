@@ -33,13 +33,21 @@ class DimReducer(_BaseFeatureTransformer):
             umap.UMAP = cuUMAP  # drop-in replacement
 
     Examples:
-        >>> reducer = DimReducer(method='pca', n_components=2)
-        >>> reduced = reducer.fit_transform(df)  # dim_0, dim_1
+        >>> import polars as pl
+        >>> df = pl.DataFrame({"a": [1.0, 2.0, 3.0], "b": [4.0, 5.0, 6.0]})
+        >>> reducer = DimReducer(method="pca", n_components=2)
+        >>> reduced = reducer.fit_transform(df)
+        >>> reduced.columns
+        ['dim_0', 'dim_1']
 
-        >>> reducer = DimReducer(method='umap', n_components=10,
-        ...                      prefix='emb_thesis', random_state=42)
-        >>> reduced = reducer.fit_transform(df)  # emb_thesis_0 .. emb_thesis_9
+        >>> reducer = DimReducer(
+        ...     method="pca", n_components=2, prefix="emb_thesis"
+        ... )
+        >>> reducer.fit_transform(df).columns
+        ['emb_thesis_0', 'emb_thesis_1']
     """
+
+    _VALID_METHODS = ("pca", "tsne", "umap")
 
     def __init__(
         self,
@@ -50,6 +58,10 @@ class DimReducer(_BaseFeatureTransformer):
         **reducer_kwargs,
     ):
         super().__init__(feature_names=feature_names)
+        if method not in self._VALID_METHODS:
+            raise ValueError(
+                f"method must be one of {self._VALID_METHODS}, got {method!r}"
+            )
         self.method = method
         self.n_components = n_components
         self.prefix = prefix
@@ -73,10 +85,6 @@ class DimReducer(_BaseFeatureTransformer):
                 ) from e
             self._reducer = umap.UMAP(
                 n_components=self.n_components, **self.reducer_kwargs
-            )
-        else:
-            raise ValueError(
-                f"method must be 'pca', 'tsne', or 'umap', got {self.method!r}"
             )
 
         X_native = nw.from_native(X)
