@@ -1,0 +1,449 @@
+/*
+ * Centimators MkDocs Theme
+ */
+
+/*=========================================================================
+  1. Global Variables (Centimators Theme)
+=========================================================================*/
+:root {
+    /* Centimators Brand Colors (Leaning on Purple) */
+    --centimators-brand-primary: #4152A8; /* Deep Purple from style-guide.md */
+    --centimators-brand-primary-light: #5D6DBE; /* Lighter Deep Purple */
+    --centimators-brand-primary-dark: #35438E;  /* Darker Deep Purple */
+    --centimators-brand-accent: #62e4fb;    /* Cyan Accent from style-guide.md */
+    --centimators-brand-accent-light: #7bd4ff; /* Lighter Cyan Accent */
+
+    /* Dark Theme Colors */
+    --dark-bg-primary: #001926;          /* Dark Abyss from style-guide.md */
+    --dark-bg-secondary: #181A2A;        /* Very Dark Grayish Blue/Purple */
+    --dark-text-primary: #ffffff;
+    --dark-text-secondary: rgba(255, 255, 255, 0.75);
+    --dark-text-muted: rgba(255, 255, 255, 0.6);
+    --dark-border-color: #2A2D45;        /* Dark border, complementing secondary bg */
+
+    /* Light Theme Colors */
+    --light-bg-primary: #ffffff;
+    --light-bg-secondary: #f4f6fa;       /* Slightly cool light grey */
+    --light-text-primary: #212529;       /* Darker text for better contrast */
+    --light-text-secondary: #495057;     /* Medium dark grey */
+    --light-text-muted: #6c757d;         /* Lighter grey */
+    --light-border-color: #dee2e6;       /* Standard light border */
+
+    /* Component Properties (Inspired by CrowdCent Challenge) */
+    --border-radius-sm: 0.25rem;
+    --border-radius-md: 0.375rem;
+    --border-radius-lg: 0.5rem;
+    --transition-base: all 0.2s ease-in-out;
+}
+
+
+/*=========================================================================
+  2. Dark Mode Styles (`slate` scheme for Centimators)
+=========================================================================*/
+[data-md-color-scheme="slate"] {
+    /* Basic Theme Overrides */
+    --md-default-bg-color: var(--dark-bg-primary);
+    --md-default-fg-color: var(--dark-text-primary);
+    --md-default-fg-color--light: var(--dark-text-secondary);
+    --md-default-fg-color--lighter: var(--dark-text-muted);
+
+    /* Primary colors are for general UI elements, header is handled in shared styles */
+    --md-primary-fg-color: var(--dark-text-primary);
+    --md-primary-bg-color: var(--dark-bg-primary);
+
+    --md-accent-fg-color: var(--centimators-brand-accent); /* Cyan */
+    --md-accent-fg-color--transparent: rgba(98, 228, 251, 0.1); /* Cyan transparent */
+    --md-accent-bg-color: var(--dark-bg-secondary);
+
+    /* Link color handled by .md-typeset a */
+    --md-typeset-mark-color: rgba(98, 228, 251, 0.3); /* Highlight color - Cyan based */
+
+    --md-code-fg-color: var(--centimators-brand-accent-light); /* Lighter Cyan for code */
+    --md-code-bg-color: var(--dark-bg-secondary);
+    --md-code-hl-color: var(--centimators-brand-accent);
+    --md-code-hl-bg-color: rgba(98, 228, 251, 0.15);
+
+    --md-admonition-fg-color: var(--dark-text-primary);
+    --md-admonition-bg-color: var(--dark-bg-secondary);
+
+    --md-footer-bg-color: var(--dark-bg-primary);
+    --md-footer-bg-color--dark: var(--dark-bg-primary);
+    --md-footer-fg-color: var(--dark-text-secondary);
+    --md-footer-fg-color--light: var(--dark-text-muted);
+
+    --md-typeset-table-color: var(--dark-border-color); /* Table borders */
+    --md-typeset-kbd-fg-color: var(--dark-text-primary);
+    --md-typeset-kbd-bg-color: var(--dark-bg-secondary);
+    --md-typeset-kbd-border-color: var(--centimators-brand-accent);
+
+    /* Navigation Tabs */
+    .md-tabs {
+      background-color: var(--centimators-brand-primary);
+      border-bottom: 1px solid var(--dark-border-color);
+    }
+    .md-tabs__link {
+      color: var(--dark-text-secondary);
+    }
+    .md-tabs__link:hover,
+    .md-tabs__link--active {
+      color: var(--centimators-brand-accent);
+    }
+
+    /* Sidebar Navigation */
+    .md-nav__title {
+      color: var(--dark-text-primary);
+    }
+    .md-nav__link--active,
+    .md-nav__link--active .md-nav__icon {
+      color: var(--centimators-brand-accent);
+    }
+    .md-nav__link:hover {
+      color: var(--centimators-brand-accent-light);
+    }
+
+    /* Buttons */
+    .md-button {
+      color: var(--dark-text-primary);
+    }
+    .md-button--primary {
+        background-color: var(--centimators-brand-accent);
+        color: var(--dark-bg-primary);
+        border-color: var(--centimators-brand-accent);
+    }
+    .md-button--primary:hover {
+        background-color: var(--centimators-brand-accent-light);
+        border-color: var(--centimators-brand-accent-light);
+        color: var(--dark-bg-primary);
+    }
+
+    /* Search */
+    .md-search__input {
+        background-color: var(--dark-bg-secondary);
+        color: var(--dark-text-primary);
+        border: 1px solid var(--dark-border-color);
+    }
+    .md-search__input::placeholder {
+        color: var(--dark-text-muted);
+    }
+    .md-search__icon {
+        color: var(--dark-text-secondary);
+    }
+    .md-search-result__meta {
+      background-color: var(--dark-bg-secondary);
+      border-bottom: 1px solid var(--dark-border-color);
+    }
+
+    /* General Links */
+    .md-typeset a {
+        color: var(--centimators-brand-accent);
+    }
+    .md-typeset a:hover,
+    .md-typeset a:active {
+        color: var(--dark-text-primary);
+        text-decoration: underline;
+    }
+
+    /* Code Blocks */
+    .md-typeset code {
+        background-color: var(--md-code-bg-color);
+        color: var(--md-code-fg-color);
+        border-radius: var(--border-radius-sm);
+        padding: 0.1em 0.3em;
+    }
+    .md-typeset pre > code {
+      padding: 0;
+    }
+    .md-typeset pre {
+        background-color: var(--md-code-bg-color);
+        border: 1px solid var(--dark-border-color);
+        border-radius: var(--border-radius-md);
+    }
+
+    /* Tables */
+    .md-typeset table:not([class]) {
+        border: 1px solid var(--dark-border-color);
+    }
+    .md-typeset table:not([class]) th {
+        background-color: var(--dark-bg-secondary);
+        color: var(--dark-text-primary);
+        border-right: 1px solid var(--dark-border-color);
+        border-bottom: 1px solid var(--dark-border-color);
+    }
+     .md-typeset table:not([class]) td {
+        border-right: 1px solid var(--dark-border-color);
+        border-bottom: 1px solid var(--dark-border-color);
+     }
+    .md-typeset table:not([class]) tr:hover {
+        background-color: rgba(98, 228, 251, 0.07);
+    }
+
+    /* Admonitions - More subtle, purple accents */
+    .md-typeset .admonition {
+        border-left: 0.2rem solid var(--centimators-brand-primary-light); /* Purple accent */
+    }
+    .md-typeset .admonition-title {
+        background-color: rgba(93, 109, 190, 0.1); /* Purple-based, from --centimators-brand-primary-light */
+        border-top: 1px solid var(--dark-border-color);
+        border-right: 1px solid var(--dark-border-color);
+    }
+    .md-typeset .admonition, .md-typeset details {
+        background-color: var(--md-admonition-bg-color);
+        border-bottom: 1px solid var(--dark-border-color);
+        border-right: 1px solid var(--dark-border-color);
+        border-top: 1px solid var(--dark-border-color); /* Admonition title handles top border visually */
+    }
+
+    /* Typography */
+    .md-typeset h1 { color: var(--centimators-brand-accent); } /* H1 still cyan for impact */
+
+    /* Content Tabs */
+    .md-typeset .tabbed-labels > label:hover {
+        color: var(--centimators-brand-accent-light);
+    }
+    .md-typeset .tabbed-labels > input:checked + label {
+        color: var(--centimators-brand-accent);
+        border-bottom-color: var(--centimators-brand-accent);
+    }
+    .md-typeset .tabbed-content {
+        background-color: var(--dark-bg-secondary);
+        border: 1px solid var(--dark-border-color);
+        border-top: none;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+    ::-webkit-scrollbar-track {
+        background: var(--dark-bg-primary);
+    }
+    ::-webkit-scrollbar-thumb {
+        background: var(--dark-bg-secondary);
+        border-radius: var(--border-radius-sm);
+        border: 2px solid var(--dark-bg-primary);
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: var(--centimators-brand-accent);
+    }
+}
+
+
+/*=========================================================================
+  3. Light Mode Styles (`default` scheme for Centimators)
+=========================================================================*/
+[data-md-color-scheme="default"] {
+    /* Basic Theme Overrides */
+    --md-default-bg-color: var(--light-bg-primary);
+    --md-default-fg-color: var(--light-text-primary);
+    --md-default-fg-color--light: var(--light-text-secondary);
+    --md-default-fg-color--lighter: var(--light-text-muted);
+
+    /* Primary colors are for general UI, header is handled in shared styles */
+    /* This would have made header purple: var(--centimators-brand-primary) */
+    /* Header text would have been: var(--dark-text-primary) */
+    --md-primary-fg-color: var(--dark-text-primary);
+    --md-primary-bg-color: var(--centimators-brand-primary);
+
+    --md-accent-fg-color: var(--centimators-brand-primary); /* Deep Purple for accents */
+    --md-accent-fg-color--transparent: rgba(65, 82, 168, 0.1); /* Deep Purple transparent */
+    --md-accent-bg-color: var(--light-bg-secondary);
+
+    /* Link color handled by .md-typeset a */
+    --md-typeset-mark-color: rgba(65, 82, 168, 0.2); /* Highlight color - Purple based */
+
+    --md-code-fg-color: var(--centimators-brand-primary-dark); /* Darker Purple for code */
+    --md-code-bg-color: var(--light-bg-secondary);
+    --md-code-hl-color: var(--centimators-brand-primary);
+    --md-code-hl-bg-color: rgba(65, 82, 168, 0.1);
+
+    --md-admonition-fg-color: var(--light-text-primary);
+    --md-admonition-bg-color: var(--light-bg-secondary);
+
+    --md-footer-bg-color: var(--dark-bg-primary); /* Keep footer dark for contrast */
+    --md-footer-bg-color--dark: var(--dark-bg-primary);
+    --md-footer-fg-color: var(--dark-text-secondary);
+    --md-footer-fg-color--light: var(--dark-text-muted);
+
+    --md-typeset-table-color: var(--light-border-color);
+    --md-typeset-kbd-fg-color: var(--light-text-primary);
+    --md-typeset-kbd-bg-color: var(--light-bg-secondary);
+    --md-typeset-kbd-border-color: var(--centimators-brand-primary);
+
+    /* Navigation Tabs - Purple themed */
+    .md-tabs {
+      background-color: var(--centimators-brand-primary);
+      border-bottom: 1px solid var(--centimators-brand-primary-dark);
+    }
+    .md-tabs__link {
+      color: rgba(255, 255, 255, 0.8);
+    }
+    .md-tabs__link:hover,
+    .md-tabs__link--active {
+      color: var(--dark-text-primary);
+    }
+
+    /* Sidebar Navigation */
+    .md-nav__title {
+      color: var(--light-text-primary);
+    }
+    .md-nav__link--active,
+    .md-nav__link--active .md-nav__icon {
+      color: var(--centimators-brand-primary);
+    }
+    .md-nav__link:hover {
+      color: var(--centimators-brand-primary-light);
+    }
+
+    /* Buttons */
+    .md-button {
+      color: var(--light-text-primary);
+    }
+    .md-button--primary {
+        background-color: var(--centimators-brand-primary);
+        color: var(--dark-text-primary);
+        border-color: var(--centimators-brand-primary);
+    }
+    .md-button--primary:hover {
+        background-color: var(--centimators-brand-primary-light);
+        border-color: var(--centimators-brand-primary-light);
+        color: var(--dark-text-primary);
+    }
+
+    /* Search */
+    .md-search__input {
+        background-color: var(--light-bg-secondary);
+        color: var(--light-text-primary);
+        border: 1px solid var(--light-border-color);
+    }
+    .md-search__input::placeholder {
+        color: var(--light-text-muted);
+    }
+    .md-search-result__meta {
+      background-color: var(--light-bg-secondary);
+      border-bottom: 1px solid var(--light-border-color);
+    }
+
+    /* General Links */
+    .md-typeset a {
+        color: var(--centimators-brand-primary);
+    }
+    .md-typeset a:hover,
+    .md-typeset a:active {
+        color: var(--centimators-brand-primary-dark);
+        text-decoration: underline;
+    }
+
+    /* Code Blocks */
+    .md-typeset code {
+        background-color: var(--md-code-bg-color);
+        color: var(--md-code-fg-color);
+        border-radius: var(--border-radius-sm);
+        padding: 0.1em 0.3em;
+    }
+    .md-typeset pre > code {
+      padding: 0;
+    }
+    .md-typeset pre {
+        background-color: var(--md-code-bg-color);
+        border: 1px solid var(--light-border-color);
+        border-radius: var(--border-radius-md);
+    }
+
+    /* Tables */
+    .md-typeset table:not([class]) {
+        border: 1px solid var(--light-border-color);
+    }
+    .md-typeset table:not([class]) th {
+        background-color: var(--light-bg-secondary);
+        color: var(--light-text-primary);
+        border-right: 1px solid var(--light-border-color);
+        border-bottom: 1px solid var(--light-border-color);
+    }
+     .md-typeset table:not([class]) td {
+        border-right: 1px solid var(--light-border-color);
+        border-bottom: 1px solid var(--light-border-color);
+     }
+    .md-typeset table:not([class]) tr:hover {
+        background-color: rgba(65, 82, 168, 0.05);
+    }
+
+    /* Admonitions - Subtle purple accents */
+    .md-typeset .admonition {
+        border-left: 0.2rem solid var(--centimators-brand-primary);
+    }
+    .md-typeset .admonition-title {
+        background-color: rgba(65, 82, 168, 0.08); /* Purple-based, from --centimators-brand-primary, slightly more transparent */
+        border-top: 1px solid var(--light-border-color);
+        border-right: 1px solid var(--light-border-color);
+        color: var(--centimators-brand-primary-dark);
+    }
+     .md-typeset .admonition, .md-typeset details {
+        background-color: var(--md-admonition-bg-color);
+        border-bottom: 1px solid var(--light-border-color);
+        border-right: 1px solid var(--light-border-color);
+        border-top: 1px solid var(--light-border-color);
+    }
+
+    /* Typography */
+    .md-typeset h1 { color: var(--centimators-brand-primary); } /* H1 purple for impact */
+
+    /* Content Tabs */
+    .md-typeset .tabbed-labels > label:hover {
+        color: var(--centimators-brand-primary-light);
+    }
+    .md-typeset .tabbed-labels > input:checked + label {
+        color: var(--centimators-brand-primary);
+        border-bottom-color: var(--centimators-brand-primary);
+    }
+    .md-typeset .tabbed-content {
+        background-color: var(--light-bg-primary);
+        border: 1px solid var(--light-border-color);
+        border-top: none;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+    ::-webkit-scrollbar-track {
+        background: var(--light-bg-secondary);
+    }
+    ::-webkit-scrollbar-thumb {
+        background: var(--centimators-brand-primary-light);
+        border-radius: var(--border-radius-sm);
+        border: 2px solid var(--light-bg-secondary);
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: var(--centimators-brand-primary);
+    }
+}
+
+/*=========================================================================
+  4. Shared Styles (Apply regardless of scheme)
+=========================================================================*/
+/* Header is always purple */
+.md-header {
+    background-color: var(--centimators-brand-primary); /* Deep Purple */
+    color: var(--dark-text-primary);                     /* White text */
+    border-bottom: 1px solid var(--centimators-brand-primary-dark); /* Darker purple border */
+}
+
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3,
+.md-typeset h4,
+.md-typeset h5,
+.md-typeset h6 {
+    font-weight: 500;
+}
+
+.md-ellipsis {
+    font-weight: 500;
+}
+
+/* Ensure Poppins font is applied if specified in mkdocs.yml */
+body {
+    font-family: "Poppins", sans-serif;
+} 
