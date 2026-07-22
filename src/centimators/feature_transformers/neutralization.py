@@ -1,5 +1,7 @@
 """Neutralization transformers for reducing feature exposure."""
 
+from __future__ import annotations
+
 import warnings
 
 import narwhals as nw

@@ -1,5 +1,7 @@
 """Feature penalization transformers using iterative optimization (requires JAX)."""
 
+from __future__ import annotations
+
 import warnings
 
 import narwhals as nw

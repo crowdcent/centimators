@@ -20,6 +20,18 @@ jobs:
       - name: Run tests with coverage
         run: uv run --all-extras pytest --cov=centimators --cov-report=term
 
+  # The lockfile tracks latest narwhals; the declared floor is much older and
+  # narwhals 1.x exposes typing aliases as runtime strings, which annotations
+  # can trip on at import time. Smoke-test imports at the floor so a green
+  # lockfile can't hide a broken install for downstream pins.
+  test-narwhals-floor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - name: Import smoke test on minimum supported narwhals
+        run: uv run --all-extras --with "narwhals==1.39.0" pytest tests/test_imports.py
+
   lint:
     runs-on: ubuntu-latest
     steps:
