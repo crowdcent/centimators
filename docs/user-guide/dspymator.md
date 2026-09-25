@@ -219,6 +219,37 @@ few_shot_classifier.fit(
 predictions = few_shot_classifier.predict(test_reviews[["review_text"]])
 ```
 
+### Probabilities and Decision Models (TypeSafe)
+
+With dspy>=3.4, a single output typed as `bool`, `Literal[...]`, or dspy's
+experimental `Noul`/`Choice`/`Score` makes DSPyMator a probabilistic classifier:
+`predict_proba` and `classes_` work, so sklearn scorers like `roc_auc` and
+`neg_log_loss` do too.
+
+`lm` also accepts TypeSafe's non-generative System One models, which answer
+typed decisions with probabilities instead of writing text. Use `dspy.Predict`
+and give every output field a `desc`:
+
+```python
+from dspy.experimental import TypeSafe
+from sklearn.model_selection import cross_val_score
+
+class Satire(dspy.Signature):
+    """Decide whether a news headline is satire."""
+    headline: str = dspy.InputField()
+    is_onion: bool = dspy.OutputField(desc="Is this headline from The Onion?")
+
+clf = DSPyMator(
+    program=dspy.Predict(Satire),
+    target_names="is_onion",
+    lm=TypeSafe("jev-latest"),  # reads TYPESAFE_API_KEY
+)
+cross_val_score(clf, df.select("headline"), df["is_onion"], cv=5, scoring="roc_auc")
+```
+
+Optimizers still apply: instructions and demos are sent to the model. GEPA's
+`reflection_lm` must be a generative LM.
+
 ### Advanced: Custom Multi-Input Features
 
 DSPyMator automatically maps multiple dataframe columns to signature fields:
