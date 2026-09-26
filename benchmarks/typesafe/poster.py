@@ -28,6 +28,8 @@ LINES = [  # method, label, color, style
     ("tfidf_lr", "TF-IDF + logistic regression", TFIDF, "-"),
     ("luna_fewshot", "GPT-6 Luna, labels as examples", LUNA, "--"),
     ("jev_gepa", "Jev + GEPA-tuned prompt", JEV, "-"),
+    ("jev_lr", "Jev probabilities → logistic regression", "#f4a582", "-."),
+    ("stack_lr", "embeddings + Jev probabilities → LR", "#b2182b", "-"),
 ]
 FLATS = [
     ("jev_zeroshot", "Jev, no labels", JEV, ":"),
@@ -67,6 +69,19 @@ def curves(t: pl.DataFrame) -> str:
             c = d.filter(pl.col("method") == m)
             if len(c):
                 ax.axhline(c["f1"][0], color=color, ls=ls, lw=1.6, label=label)
+        cv = d.filter(pl.col("method") == "jev_gepacv")
+        if len(cv):
+            ax.scatter(
+                256,
+                cv["f1"][0],
+                marker="*",
+                s=180,
+                facecolor="white",
+                edgecolor=JEV,
+                lw=1.5,
+                zorder=4,
+                label="Jev + GEPA, settings chosen by GridSearchCV",
+            )
         ax.set_xscale("log")
         ax.set_xticks([16, 64, 256, 1024, 4000], ["16", "64", "256", "1k", "4k"])
         ax.set_title(TASKS[task].title, fontsize=10)
@@ -156,6 +171,59 @@ def cost(t: pl.DataFrame) -> str:
     return png(fig)
 
 
+def hypotheses(t) -> str:
+    """Pre-registered follow-ups (PROTOCOL.md), one row per test, 'pending' until the cells exist."""
+
+    def fmt(d):
+        if d is None:
+            return "<td class=tie>pending</td>"
+        v, lo, hi = d
+        cls = "win" if lo > 0 else ("loss" if hi < 0 else "tie")
+        return f"<td class={cls}>{v:+.3f} <span class=ci>[{lo:+.3f}, {hi:+.3f}]</span></td>"
+
+    tests = [
+        ("H1 GEPA 1k vs 256 labels", ("jev_gepa", 1024), ("jev_gepa", 256)),
+        ("H1 GEPA 4k vs 256 labels", ("jev_gepa", 4000), ("jev_gepa", 256)),
+        (
+            "H2 GridSearchCV settings vs default (seed 0)",
+            ("jev_gepacv", 256, 0),
+            ("jev_gepa", 256, 0),
+        ),
+        ("H3 stack vs embeddings, 1k", ("stack_lr", 1024), ("embed_lr", 1024)),
+        ("H3 stack vs embeddings, 4k", ("stack_lr", 4000), ("embed_lr", 4000)),
+        ("H3 stack vs Jev + GEPA, 1k", ("stack_lr", 1024), ("jev_gepa", 1024)),
+        ("H3 stack vs Jev + GEPA, 4k", ("stack_lr", 4000), ("jev_gepa", 4000)),
+    ]
+    head = "".join(f"<th>{TASKS[k].title.split(' (')[0]}</th>" for k in ORDER)
+    rows = "".join(
+        f"<tr><td>{name}</td>"
+        + "".join(fmt(paired_delta(k, a, b)) for k in ORDER)
+        + "</tr>"
+        for name, a, b in tests
+    )
+    ll = []
+    for n in (64, 256, 1024, 4000):
+        cells = []
+        for k in ORDER:
+            raw = t.filter(pl.col("task") == k, pl.col("method") == "jev_zeroshot")[
+                "log_loss"
+            ]
+            lr = t.filter(
+                pl.col("task") == k,
+                pl.col("method") == "jev_lr",
+                pl.col("n_labels") == n,
+            )["log_loss"]
+            cells.append(
+                f"<td>{raw[0]:.3f} → {lr[0]:.3f}</td>"
+                if len(raw) and len(lr)
+                else "<td class=tie>pending</td>"
+            )
+        ll.append(
+            f"<tr><td>H3b log loss, raw Jev → Jev + LR ({n:,} labels)</td>{''.join(cells)}</tr>"
+        )
+    return f"<table><tr><th>Test (macro-F1 Δ, 95% CI)</th>{head}</tr>{rows}{''.join(ll)}</table>"
+
+
 def cell_mean(t, task, m, n):
     d = t.filter(pl.col("task") == task, pl.col("method") == m, pl.col("n_labels") == n)
     return d["f1"][0] if len(d) else float("nan")
@@ -235,6 +303,9 @@ Same labeled rows, same 500 test rows, 3 seeds, every method tuned only on its o
 <p class=lede>Lines are seed means, bands are ±1 sd across 3 labeled subsets. Dotted lines use no labels at all.
 The red curve is Jev after GEPA tuned its prompt on that many labels.</p>
 <img src="{img_curves}"></section>
+<section><h2>Pre-registered follow-ups</h2>
+<p class=lede>Hypotheses committed before these runs (benchmarks/typesafe/PROTOCOL.md). Green = CI above zero, red = below.</p>
+{hypotheses(t)}</section>
 <section><h2>Head to head at matched label budgets</h2>
 <p class=lede>Macro-F1 differences with 95% paired bootstrap CIs over the test rows; green = CI above zero.</p>
 <table><tr><th>Task</th><th>Jev, 0 labels</th><th>Jev + GEPA, 256</th><th>RoBERTa, 256</th><th>Δ vs RoBERTa 256</th><th>RoBERTa, 4,000</th><th>Δ vs RoBERTa 4,000</th><th>Luna + 16 examples</th></tr>{rows}</table></section>

@@ -40,11 +40,12 @@ def table(df: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def _preds(task, method, n):
-    """Per-row predicted class for every seed of a cell, test order preserved."""
+def _preds(task, method, n, seed=None):
+    """Per-row predicted class for every seed of a cell (or one seed), test order preserved."""
     classes = TASKS[task].classes
     out = []
-    for f in sorted(ABL.glob(f"{task}__{method}__n{n}__s*.parquet")):
+    s = "*" if seed is None else seed
+    for f in sorted(ABL.glob(f"{task}__{method}__n{n}__s{s}.parquet")):
         p = pl.read_parquet(f)
         out.append(
             np.asarray(classes)[
