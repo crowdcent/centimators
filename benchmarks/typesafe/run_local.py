@@ -25,7 +25,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from metrics import score
+from metrics import save_preds, score
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
@@ -82,11 +82,13 @@ def run_tfidf(rows, name, train, test, classes, sizes):
                 LogisticRegression(max_iter=2000, C=10.0),
             ).fit(sub["text"].to_list(), sub["label"].to_list())
             t = time.time()
-            proba = model.predict_proba(test["text"].to_list())
-            secs.append(time.time() - t)
-            results.append(
-                score(test["label"], _align(proba, model.classes_, classes), classes)
+            proba = _align(
+                model.predict_proba(test["text"].to_list()), model.classes_, classes
             )
+            secs.append(time.time() - t)
+            results.append(score(test["label"], proba, classes))
+            if n == max(sizes):
+                save_preds(OUT / f"preds-{name}-tfidf_lr.parquet", test, proba, classes)
         emit(
             rows,
             name,
@@ -127,13 +129,10 @@ def run_embed(rows, name, train, test, classes, sizes, embedder):
             clf = LogisticRegression(max_iter=2000, C=10.0).fit(
                 train_emb[idx], train["label"].to_numpy()[idx]
             )
-            results.append(
-                score(
-                    test["label"],
-                    _align(clf.predict_proba(test_emb), clf.classes_, classes),
-                    classes,
-                )
-            )
+            proba = _align(clf.predict_proba(test_emb), clf.classes_, classes)
+            results.append(score(test["label"], proba, classes))
+            if n == max(sizes):
+                save_preds(OUT / f"preds-{name}-embed_lr.parquet", test, proba, classes)
         emit(
             rows,
             name,
@@ -161,6 +160,7 @@ def run_nli(rows, name, task, test, classes, nli):
     proba = np.array(
         [[dict(zip(o["labels"], o["scores"]))[lab] for lab in labels] for o in out]
     )
+    save_preds(OUT / f"preds-{name}-zeroshot_nli.parquet", test, proba, classes)
     emit(
         rows,
         name,
@@ -229,6 +229,13 @@ def run_finetune(rows, name, train, test, classes, sizes, epochs=3):
                     torch.softmax(model(**enc).logits.float(), -1).cpu().numpy()
                 )
         secs = time.time() - t
+        if n == max(sizes):
+            save_preds(
+                OUT / f"preds-{name}-roberta_ft.parquet",
+                test,
+                np.vstack(probs),
+                classes,
+            )
         emit(
             rows,
             name,
@@ -288,7 +295,7 @@ def main():
         if "nli" in methods:
             run_nli(rows, name, task, test, classes, nli)
         if "finetune" in methods:
-            run_finetune(rows, name, train, test, classes, [256, 4000])
+            run_finetune(rows, name, train, test, classes, [4000])
         (OUT / "results.jsonl").write_text(
             "\n".join(json.dumps(r) for r in rows) + "\n"
         )

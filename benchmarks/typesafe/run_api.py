@@ -15,7 +15,7 @@ from typing import Annotated, Literal
 import dspy
 import polars as pl
 from dspy.experimental import Choice, TypeSafe
-from metrics import score
+from metrics import save_preds, score
 from tasks import TASKS, load_task
 
 from centimators.model_estimators import DSPyMator
@@ -118,6 +118,7 @@ def run(task_name, method):
     }
     OUT.mkdir(exist_ok=True)
     (OUT / f"api-{task_name}-{method}.json").write_text(json.dumps(result, indent=2))
+    save_preds(OUT / f"preds-{task_name}-{method}.parquet", test, proba, est.classes_)
     print(json.dumps(result))
     return result
 

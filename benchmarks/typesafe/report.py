@@ -9,6 +9,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import polars as pl
+from metrics import score
 from tasks import TASKS
 
 LABELS = {
@@ -89,8 +90,31 @@ def chart(df: pl.DataFrame, path: Path, metric="macro_f1"):
     fig.savefig(path, dpi=160)
 
 
+def rescore(df: pl.DataFrame, preds_dir: Path) -> pl.DataFrame:
+    """Recompute quality metrics from saved per-row predictions (largest n per method)."""
+    for f in preds_dir.glob("preds-*.parquet"):
+        task, method = f.stem.removeprefix("preds-").split("-", 1)
+        classes = TASKS[task].classes
+        p = pl.read_parquet(f)
+        m = score(
+            p["label"].to_numpy(),
+            p.select([f"p_{c}" for c in classes]).to_numpy(),
+            classes,
+        )
+        sel = (pl.col("task") == task) & (pl.col("method") == method)
+        n = df.filter(sel)["n_labels"].max()
+        sel = sel & (pl.col("n_labels") == n)
+        df = df.with_columns(
+            [
+                pl.when(sel).then(pl.lit(v)).otherwise(pl.col(k)).alias(k)
+                for k, v in m.items()
+            ]
+        )
+    return df
+
+
 if __name__ == "__main__":
-    df = load(sys.argv[1:])
+    df = rescore(load(sys.argv[1:]), Path(__file__).parent / "results")
     out = Path(__file__).parent / "results"
     out.mkdir(exist_ok=True)
     df.sort("task", "method", "n_labels").write_csv(out / "summary.csv")
