@@ -1,17 +1,17 @@
 from typing import Literal
 
 import numpy as np
+import polars as pl
 import pytest
+import sklearn
+from sklearn.model_selection import GridSearchCV, StratifiedKFold, cross_val_score
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import FunctionTransformer
 
 dspy = pytest.importorskip("dspy")
 pytest.importorskip("dspy.adapters.decision", reason="decision outputs need dspy>=3.4")
 
-import polars as pl
-from sklearn.model_selection import StratifiedKFold, cross_val_score
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import FunctionTransformer
-
-from centimators.model_estimators import DSPyMator
+from centimators.model_estimators import DSPyMator, DSPyOptimizer  # noqa: E402
 
 
 class FakeDecisionLM:
@@ -128,6 +128,64 @@ def test_sklearn_scorer_and_pipeline_with_decision_lm():
         pipe, X, y, cv=StratifiedKFold(3), scoring="roc_auc", error_score="raise"
     )
     np.testing.assert_allclose(scores, 1.0)
+
+
+def test_optimizer_settings_are_searchable_hyperparameters():
+    X, y = _data(12)
+    est = DSPyMator(
+        program=dspy.Predict(Satire),
+        target_names="is_satire",
+        lm=FakeDecisionLM(),
+        verbose=False,
+        optimizer=DSPyOptimizer(dspy.LabeledFewShot, k=1),
+    )
+    search = GridSearchCV(
+        est,
+        {"optimizer__k": [1, 4]},
+        cv=StratifiedKFold(3),
+        scoring="roc_auc",
+        error_score="raise",
+    ).fit(X, y)
+
+    assert search.best_params_["optimizer__k"] in (1, 4)
+    assert (
+        len(search.best_estimator_.program.demos) == search.best_params_["optimizer__k"]
+    )
+    assert est.program.demos == []
+    assert est.optimizer.kwargs == {"k": 1}
+
+
+def test_search_composes_with_metadata_routing():
+    X, y = _data(12)
+    est = DSPyMator(
+        program=dspy.Predict(Satire),
+        target_names="is_satire",
+        lm=FakeDecisionLM(),
+        verbose=False,
+        optimizer=DSPyOptimizer(dspy.LabeledFewShot, k=1),
+    )
+    pipe = make_pipeline(FunctionTransformer(lambda df: df), est)
+    with sklearn.config_context(enable_metadata_routing=True):
+        search = GridSearchCV(
+            pipe,
+            {"dspymator__optimizer__k": [1, 2]},
+            cv=StratifiedKFold(3),
+            scoring="neg_log_loss",
+            error_score="raise",
+        ).fit(X, y)
+    assert search.best_params_["dspymator__optimizer__k"] in (1, 2)
+
+
+def test_fit_optimizer_argument_overrides_constructor():
+    X, y = _data(6)
+    est = DSPyMator(
+        program=dspy.Predict(Satire),
+        target_names="is_satire",
+        lm=FakeDecisionLM(),
+        verbose=False,
+        optimizer=dspy.LabeledFewShot(k=1),
+    ).fit(X, y, optimizer=dspy.LabeledFewShot(k=3))
+    assert len(est.program.demos) == 3
 
 
 def test_predict_proba_requires_decision_target():

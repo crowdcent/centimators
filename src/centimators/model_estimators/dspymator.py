@@ -3,6 +3,7 @@ DSPyMator: A scikit-learn compatible wrapper for DSPy modules.
 """
 
 import asyncio
+import copy
 import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -11,7 +12,7 @@ from typing import Any, get_args
 import dspy
 import narwhals as nw
 import numpy
-from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.base import BaseEstimator, TransformerMixin, clone
 from sklearn.model_selection import train_test_split
 from sklearn.utils import ClassifierTags
 
@@ -39,6 +40,41 @@ def _unwrap(value):
 
 def _to_python(value):
     return value.item() if isinstance(value, numpy.generic) else value
+
+
+class DSPyOptimizer:
+    """A DSPy optimizer as an sklearn hyperparameter: the class plus its keyword arguments.
+
+    DSPyMator builds a fresh optimizer from it on every fit, and each keyword is a
+    nested parameter, so `GridSearchCV` can tune optimizer settings directly:
+
+    ```python
+    est = DSPyMator(program=..., target_names="label", lm=lm,
+                    optimizer=DSPyOptimizer(dspy.GEPA, metric=m, reflection_lm=r,
+                                            max_metric_calls=400),
+                    validation_data=0.5)
+    GridSearchCV(est, {"optimizer__reflection_minibatch_size": [3, 8]}).fit(X, y)
+    ```
+    """
+
+    def __init__(self, optimizer_cls, **kwargs):
+        self.optimizer_cls = optimizer_cls
+        self.kwargs = kwargs
+
+    def get_params(self, deep=True):
+        return {"optimizer_cls": self.optimizer_cls, **self.kwargs}
+
+    def set_params(self, **params):
+        self.optimizer_cls = params.pop("optimizer_cls", self.optimizer_cls)
+        self.kwargs.update(params)
+        return self
+
+    def build(self):
+        return self.optimizer_cls(**self.kwargs)
+
+    def __repr__(self):
+        args = ", ".join(f"{k}={v!r}" for k, v in self.kwargs.items())
+        return f"DSPyOptimizer({self.optimizer_cls.__name__}, {args})"
 
 
 @dataclass(kw_only=True)
@@ -215,6 +251,8 @@ class DSPyMator(TransformerMixin, BaseEstimator):
     use_async: bool = True
     max_concurrent: int = 50
     verbose: bool = True
+    optimizer: Any = None
+    validation_data: Any = None
 
     def _get_signature(self):
         """Extract signature from the DSPy program.
@@ -260,7 +298,10 @@ class DSPyMator(TransformerMixin, BaseEstimator):
             y: Target values (can be None for unsupervised tasks).
             optimizer: Optional DSPy optimizer instance (e.g., dspy.GEPA, dspy.BootstrapFewShot,
                 dspy.MIPROv2). When provided, enables prompt optimization or finetuning during fit.
-            validation_data: Validation data for optimizers that require it.
+                Overrides the `optimizer` constructor parameter, which is the form
+                `GridSearchCV` and `clone` can see.
+            validation_data: Validation data for optimizers that require it; overrides
+                the `validation_data` constructor parameter.
                 - If tuple: Use as (X_val, y_val) directly.
                 - If float (0-1): Fraction of training data to use for validation.
                 - If None: No validation set (for optimizers that only need trainset).
@@ -305,6 +346,13 @@ class DSPyMator(TransformerMixin, BaseEstimator):
                 f"Number of feature_names ({len(self.feature_names)}) must match "
                 f"number of input_fields ({len(self.input_fields_)})"
             )
+
+        if optimizer is None:
+            optimizer = self.optimizer
+        if validation_data is None:
+            validation_data = self.validation_data
+        if isinstance(optimizer, DSPyOptimizer):
+            optimizer = optimizer.build()
 
         # Optimization if requested
         if optimizer is not None:
@@ -612,3 +660,13 @@ class DSPyMator(TransformerMixin, BaseEstimator):
 
     def __sklearn_is_fitted__(self):
         return getattr(self, "_is_fitted", False)
+
+    def __sklearn_clone__(self):
+        # A raw DSPy optimizer exposes get_params() without `deep`, so sklearn's
+        # clone would treat it as an estimator and fail; copy it whole.
+        raw = lambda name, v: name == "optimizer" and not isinstance(v, DSPyOptimizer)  # noqa: E731
+        params = {
+            name: copy.deepcopy(value) if raw(name, value) else clone(value, safe=False)
+            for name, value in self.get_params(deep=False).items()
+        }
+        return type(self)(**params)
