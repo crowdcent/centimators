@@ -14,15 +14,15 @@ from typing import Annotated, Literal
 
 import dspy
 import polars as pl
+from centimators.model_estimators import DSPyMator
 from dspy.experimental import Choice, TypeSafe
+
 from metrics import save_preds, score
 from tasks import TASKS, load_task
 
-from centimators.model_estimators import DSPyMator
-
 OUT = Path(__file__).parent / "results"
 # USD per million tokens (input, output).
-PRICES = {"jev": (0.042, 0.0), "gpt-5-mini": (0.25, 2.0)}
+PRICES = {"jev": (0.042, 0.0), "gpt-5-mini": (0.25, 2.0), "gpt-6-luna": (0.10, 0.50)}
 
 
 def signature_for(task):
@@ -43,6 +43,15 @@ def make_lm(kind):
             "jev-latest",
             api_key=os.environ.get("TYPESAFE_API_KEY", "PROXY_TYPESAFE_KEY"),
             cache=False,  # cached rows report no latency or tokens
+        )
+    if kind == "gpt-6-luna":
+        return dspy.LM(
+            "openai/gpt-6-luna",
+            api_key=os.environ.get("OPENAI_API_KEY", "PROXY_OPENAI_KEY"),
+            temperature=1.0,
+            max_tokens=16000,
+            reasoning_effort="none",
+            cache=False,
         )
     return dspy.LM(
         "openai/gpt-5-mini",
@@ -65,6 +74,7 @@ METHODS = {
     "jev_zeroshot": ("jev", 0),
     "jev_fewshot": ("jev", 4),
     "gpt5mini_zeroshot": ("gpt-5-mini", 0),
+    "gpt6luna_zeroshot": ("gpt-6-luna", 0),
 }
 
 
