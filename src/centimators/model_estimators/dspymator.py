@@ -2,18 +2,79 @@
 DSPyMator: A scikit-learn compatible wrapper for DSPy modules.
 """
 
-from dataclasses import dataclass
-from typing import Any
 import asyncio
+import copy
 import warnings
+from contextlib import contextmanager
+from dataclasses import dataclass
+from typing import Any, get_args
 
-from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.model_selection import train_test_split
+import dspy
 import narwhals as nw
 import numpy
-import dspy
+from sklearn.base import BaseEstimator, TransformerMixin, clone
+from sklearn.model_selection import train_test_split
+from sklearn.utils import ClassifierTags
 
 from centimators.narwhals_utils import _ensure_numpy
+
+try:  # dspy>=3.4: typed decision outputs with probability evidence
+    from dspy.adapters.decision import record_evidence
+    from dspy.adapters.types.decision import Choice, Noul, Score, decision_type
+except ImportError:  # pragma: no cover - older dspy
+    Choice = Noul = Score = decision_type = None
+
+    @contextmanager
+    def record_evidence():
+        yield []
+
+
+def _unwrap(value):
+    """Return the plain value of a typed decision (Noul/Choice/Score)."""
+    return (
+        value.value
+        if Noul is not None and isinstance(value, (Noul, Choice, Score))
+        else value
+    )
+
+
+def _to_python(value):
+    return value.item() if isinstance(value, numpy.generic) else value
+
+
+class DSPyOptimizer:
+    """A DSPy optimizer as an sklearn hyperparameter: the class plus its keyword arguments.
+
+    DSPyMator builds a fresh optimizer from it on every fit, and each keyword is a
+    nested parameter, so `GridSearchCV` can tune optimizer settings directly:
+
+    ```python
+    est = DSPyMator(program=..., target_names="label", lm=lm,
+                    optimizer=DSPyOptimizer(dspy.GEPA, metric=m, reflection_lm=r,
+                                            max_metric_calls=400),
+                    validation_data=0.5)
+    GridSearchCV(est, {"optimizer__reflection_minibatch_size": [3, 8]}).fit(X, y)
+    ```
+    """
+
+    def __init__(self, optimizer_cls, **kwargs):
+        self.optimizer_cls = optimizer_cls
+        self.kwargs = kwargs
+
+    def get_params(self, deep=True):
+        return {"optimizer_cls": self.optimizer_cls, **self.kwargs}
+
+    def set_params(self, **params):
+        self.optimizer_cls = params.pop("optimizer_cls", self.optimizer_cls)
+        self.kwargs.update(params)
+        return self
+
+    def build(self):
+        return self.optimizer_cls(**self.kwargs)
+
+    def __repr__(self):
+        args = ", ".join(f"{k}={v!r}" for k, v in self.kwargs.items())
+        return f"DSPyOptimizer({self.optimizer_cls.__name__}, {args})"
 
 
 @dataclass(kw_only=True)
@@ -45,9 +106,22 @@ class DSPyMator(TransformerMixin, BaseEstimator):
           returns dataframe with target column(s). For single targets, returns
           1D array or single-column dataframe. For multiple targets, returns
           2D array or multi-column dataframe.
+        - `predict_proba(X)`: Class probabilities for a single decision target
+          (`bool`, `Literal[...]`, or dspy's experimental `Noul`/`Choice`/`Score`
+          types; requires dspy>=3.4). Columns follow `classes_`. Works with any
+          backend that returns decision evidence, including generative LMs and
+          TypeSafe's non-generative System One models.
         - `transform(X)`: Returns all output fields from the DSPy program
           (including reasoning, intermediate steps, etc.) as a dataframe in the
           same backend as the input. Use this to access full program outputs.
+
+    Decision models (TypeSafe):
+        `lm` also accepts `dspy.experimental.TypeSafe(...)`, a non-generative
+        backend that answers typed decisions with probabilities instead of
+        writing text. Use `dspy.Predict` (not `ChainOfThought`), give every output
+        field a `desc`, and keep outputs to decision types. Optimizers still
+        work: instructions and demos are sent to the model, while GEPA's
+        `reflection_lm` must remain a generative LM.
 
     Progress Tracking:
         When `verbose=True`, displays progress bars using tqdm. Requires `tqdm`
@@ -117,10 +191,11 @@ class DSPyMator(TransformerMixin, BaseEstimator):
         feature_names: Column names mapping input data to signature input fields.
             If None, inferred from dataframe columns or uses signature field names
             for numpy arrays. Must match the number of input fields in the signature.
-        lm: Language model - either a string identifier (e.g., "openai/gpt-4") or a
-            pre-configured `dspy.LM` object. Pass a `dspy.LM` directly when you need
+        lm: Language model - either a string identifier (e.g., "openai/gpt-4"), a
+            pre-configured `dspy.LM` object, or a decision client such as
+            `dspy.experimental.TypeSafe`. Pass an object directly when you need
             custom configuration like `api_key` or `api_base` for providers like OpenRouter.
-            When passing an LM object, `temperature` and `max_tokens` are ignored.
+            When passing an object, `temperature` and `max_tokens` are ignored.
             Defaults to "openai/gpt-5-nano".
         temperature: Sampling temperature for the language model. Defaults to 1.0.
         max_tokens: Maximum tokens in model responses. Defaults to 16000.
@@ -170,12 +245,14 @@ class DSPyMator(TransformerMixin, BaseEstimator):
     program: dspy.Module
     target_names: str | list[str]
     feature_names: list[str] | None = None
-    lm: str | dspy.LM = "openai/gpt-5-nano"
+    lm: Any = "openai/gpt-5-nano"
     temperature: float = 1.0
     max_tokens: int = 16000
     use_async: bool = True
     max_concurrent: int = 50
     verbose: bool = True
+    optimizer: Any = None
+    validation_data: Any = None
 
     def _get_signature(self):
         """Extract signature from the DSPy program.
@@ -221,7 +298,10 @@ class DSPyMator(TransformerMixin, BaseEstimator):
             y: Target values (can be None for unsupervised tasks).
             optimizer: Optional DSPy optimizer instance (e.g., dspy.GEPA, dspy.BootstrapFewShot,
                 dspy.MIPROv2). When provided, enables prompt optimization or finetuning during fit.
-            validation_data: Validation data for optimizers that require it.
+                Overrides the `optimizer` constructor parameter, which is the form
+                `GridSearchCV` and `clone` can see.
+            validation_data: Validation data for optimizers that require it; overrides
+                the `validation_data` constructor parameter.
                 - If tuple: Use as (X_val, y_val) directly.
                 - If float (0-1): Fraction of training data to use for validation.
                 - If None: No validation set (for optimizers that only need trainset).
@@ -246,12 +326,12 @@ class DSPyMator(TransformerMixin, BaseEstimator):
             estimator.fit(X_train, y_train, optimizer=gepa_optimizer, validation_data=0.2)
             ```
         """
-        if isinstance(self.lm, dspy.LM):
-            self.lm_ = self.lm
-        else:
+        if isinstance(self.lm, str):
             self.lm_ = dspy.LM(
                 self.lm, temperature=self.temperature, max_tokens=self.max_tokens
             )
+        else:
+            self.lm_ = self.lm
 
         self.input_fields_ = list(self.signature_.input_fields.keys())
 
@@ -266,6 +346,13 @@ class DSPyMator(TransformerMixin, BaseEstimator):
                 f"Number of feature_names ({len(self.feature_names)}) must match "
                 f"number of input_fields ({len(self.input_fields_)})"
             )
+
+        if optimizer is None:
+            optimizer = self.optimizer
+        if validation_data is None:
+            validation_data = self.validation_data
+        if isinstance(optimizer, DSPyOptimizer):
+            optimizer = optimizer.build()
 
         # Optimization if requested
         if optimizer is not None:
@@ -317,8 +404,26 @@ class DSPyMator(TransformerMixin, BaseEstimator):
             if hasattr(optimized_program, "detailed_results"):
                 self.optimizer_results_ = optimized_program.detailed_results
 
+        classes = self._decision_classes()
+        if classes is not None:
+            self.classes_ = classes
+
         self._is_fitted = True
         return self
+
+    def _decision_classes(self):
+        """Ordered classes of a single decision target, or None."""
+        if decision_type is None or len(self._target_names) != 1:
+            return None
+        field = self.signature_.output_fields.get(self._target_names[0])
+        kind = decision_type(field) if field is not None else None
+        if kind is None:
+            return None
+        if issubclass(kind, Noul):
+            return numpy.array([False, True])
+        if issubclass(kind, Score):
+            return numpy.arange(len(kind.criteria()))
+        return numpy.array(get_args(kind.model_fields["value"].annotation))
 
     @nw.narwhalify
     def _convert_to_examples(self, X, y):
@@ -337,23 +442,13 @@ class DSPyMator(TransformerMixin, BaseEstimator):
         examples = []
 
         # Build input kwargs for each row
-        if isinstance(X, numpy.ndarray):
-            input_kwargs_list = [
-                {inp: val for inp, val in zip(self.input_fields_, row)} for row in X
-            ]
-        else:
-            input_kwargs_list = [
-                {
-                    inp: row[col]
-                    for inp, col in zip(self.input_fields_, self.feature_names)
-                }
-                for row in X.iter_rows(named=True)
-            ]
+        input_kwargs_list = list(self._iter_input_kwargs(X))
 
         # Add targets and create examples
         for kwargs, label in zip(input_kwargs_list, y):
             for i, target_name in enumerate(self._target_names):
-                kwargs[target_name] = label[i] if len(self._target_names) > 1 else label
+                value = label[i] if len(self._target_names) > 1 else label
+                kwargs[target_name] = _to_python(value)
             examples.append(dspy.Example(**kwargs).with_inputs(*self.input_fields_))
 
         return examples
@@ -362,13 +457,26 @@ class DSPyMator(TransformerMixin, BaseEstimator):
     def _iter_input_kwargs(self, X):
         if isinstance(X, numpy.ndarray):
             for row in X:
-                yield {inp: val for inp, val in zip(self.input_fields_, row)}
+                yield {
+                    inp: _to_python(val) for inp, val in zip(self.input_fields_, row)
+                }
         else:
             for row in X.iter_rows(named=True):
                 yield {
                     inp: row[col]
                     for inp, col in zip(self.input_fields_, self.feature_names)
                 }
+
+    def _call_one(self, kwargs):
+        with record_evidence() as log:
+            pred = self.program(**kwargs)
+        return pred, {name: evidence for _, name, evidence in log}
+
+    async def _acall_one(self, kwargs):
+        # Evidence lives in a ContextVar, so each asyncio task collects only its own row.
+        with record_evidence() as log:
+            pred = await self.program.acall(**kwargs)
+        return pred, {name: evidence for _, name, evidence in log}
 
     def _predict_raw_sync(self, X):
         """Synchronously predict all samples with optional progress bar."""
@@ -379,7 +487,7 @@ class DSPyMator(TransformerMixin, BaseEstimator):
                 from tqdm import tqdm
 
                 return [
-                    self.program(**kwargs)
+                    self._call_one(kwargs)
                     for kwargs in tqdm(input_kwargs, desc="DSPyMator predicting")
                 ]
             except ImportError:
@@ -387,9 +495,9 @@ class DSPyMator(TransformerMixin, BaseEstimator):
                     "tqdm not installed; progress bar unavailable. Install tqdm for progress tracking.",
                     stacklevel=2,
                 )
-                return [self.program(**kwargs) for kwargs in input_kwargs]
+                return [self._call_one(kwargs) for kwargs in input_kwargs]
         else:
-            return [self.program(**kwargs) for kwargs in input_kwargs]
+            return [self._call_one(kwargs) for kwargs in input_kwargs]
 
     async def _predict_raw_async(self, X):
         """Asynchronously predict all samples with bounded concurrency and optional progress bar."""
@@ -398,7 +506,7 @@ class DSPyMator(TransformerMixin, BaseEstimator):
 
         async def run_one(kwargs):
             async with semaphore:
-                return await self.program.acall(**kwargs)
+                return await self._acall_one(kwargs)
 
         tasks = [run_one(kwargs) for kwargs in input_kwargs]
 
@@ -445,7 +553,7 @@ class DSPyMator(TransformerMixin, BaseEstimator):
     def predict(self, X):
         if not hasattr(self, "_is_fitted"):
             raise ValueError("Classifier not fitted. Call fit() first.")
-        preds = self._predict_raw(X)
+        preds = [pred for pred, _ in self._predict_raw(X)]
         fields = self._target_names
 
         if not preds:
@@ -463,7 +571,7 @@ class DSPyMator(TransformerMixin, BaseEstimator):
             )
 
         labels = numpy.array(
-            [[getattr(pred, field) for field in fields] for pred in preds]
+            [[_unwrap(getattr(pred, field)) for field in fields] for pred in preds]
         )
         predictions = labels.squeeze(axis=1) if len(fields) == 1 else labels
 
@@ -479,6 +587,38 @@ class DSPyMator(TransformerMixin, BaseEstimator):
             cols = {fields[i]: predictions[:, i] for i in range(len(fields))}
             return nw.from_dict(cols, backend=nw.get_native_namespace(X))
 
+    def predict_proba(self, X):
+        """Class probabilities for a single decision target, ordered by `classes_`.
+
+        Returns a numpy array of shape (n_samples, n_classes). The backend must
+        return decision evidence (dspy>=3.4); rows without evidence raise.
+        """
+        if not hasattr(self, "_is_fitted"):
+            raise ValueError("Classifier not fitted. Call fit() first.")
+        if not hasattr(self, "classes_"):
+            raise ValueError(
+                "predict_proba needs a single target_names field typed as a decision "
+                "(bool, Literal[...], Noul, Choice, or Score) and dspy>=3.4."
+            )
+        field = self._target_names[0]
+        rows = []
+        for _, evidence in self._predict_raw(X):
+            answer = evidence.get(field)
+            if answer is None:
+                raise ValueError(
+                    f"No decision evidence returned for {field!r}; the backend did not "
+                    "report probabilities."
+                )
+            if "noul" in answer:
+                p = answer["noul"]
+                rows.append([1.0 - p, p])
+            else:
+                probs = answer["probabilities"]
+                rows.append(
+                    [probs.get(c, probs.get(str(c), 0.0)) for c in self.classes_]
+                )
+        return numpy.asarray(rows, dtype=float).reshape(-1, len(self.classes_))
+
     def _get_output_fields(self):
         """Get all output fields for transform."""
         signature = self._get_signature()
@@ -492,11 +632,11 @@ class DSPyMator(TransformerMixin, BaseEstimator):
             raise ValueError("Classifier not fitted. Call fit() first.")
 
         output_fields = self._get_output_fields()
-        preds = self._predict_raw(X)
+        preds = [pred for pred, _ in self._predict_raw(X)]
 
         # Build a dictionary of columns
         data = {
-            field: [getattr(pred, field, None) for pred in preds]
+            field: [_unwrap(getattr(pred, field, None)) for pred in preds]
             for field in output_fields
         }
 
@@ -509,5 +649,24 @@ class DSPyMator(TransformerMixin, BaseEstimator):
     def get_feature_names_out(self, input_features=None):
         return self._get_output_fields()
 
+    def __sklearn_tags__(self):
+        tags = super().__sklearn_tags__()
+        # A single decision target makes this a probabilistic classifier, which
+        # sklearn scorers (roc_auc, neg_log_loss, ...) require for predict_proba.
+        if self._decision_classes() is not None:
+            tags.estimator_type = "classifier"
+            tags.classifier_tags = ClassifierTags()
+        return tags
+
     def __sklearn_is_fitted__(self):
         return getattr(self, "_is_fitted", False)
+
+    def __sklearn_clone__(self):
+        # A raw DSPy optimizer exposes get_params() without `deep`, so sklearn's
+        # clone would treat it as an estimator and fail; copy it whole.
+        raw = lambda name, v: name == "optimizer" and not isinstance(v, DSPyOptimizer)  # noqa: E731
+        params = {
+            name: copy.deepcopy(value) if raw(name, value) else clone(value, safe=False)
+            for name, value in self.get_params(deep=False).items()
+        }
+        return type(self)(**params)

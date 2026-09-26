@@ -19,6 +19,7 @@ __all__ = [
     "TemperatureAnnealing",
     # DSPy estimator
     "DSPyMator",
+    "DSPyOptimizer",
     # Meta-estimator
     "KerasCortex",
 ]
@@ -35,6 +36,7 @@ _LAZY_IMPORTS: dict[str, str] = {
     "TemperatureAnnealing": "centimators.model_estimators.keras_estimators.tree",
     # DSPy estimator
     "DSPyMator": "centimators.model_estimators.dspymator",
+    "DSPyOptimizer": "centimators.model_estimators.dspymator",
     # Meta-estimator
     "KerasCortex": "centimators.model_estimators.keras_cortex",
 }

@@ -192,6 +192,32 @@ optimized_classifier.fit(
 predictions = optimized_classifier.predict(test_reviews[["review_text"]])
 ```
 
+#### Tuning optimizer settings with GridSearchCV
+
+Wrap the optimizer in `DSPyOptimizer` and pass it to the constructor. Each keyword becomes a nested hyperparameter, a fresh optimizer is built on every fit, and each CV fold does its own validation split:
+
+```python
+from centimators.model_estimators import DSPyMator, DSPyOptimizer
+from sklearn.model_selection import GridSearchCV, StratifiedKFold
+
+est = DSPyMator(
+    program=dspy.Predict(Sentiment),
+    target_names="sentiment",
+    lm=lm,
+    optimizer=DSPyOptimizer(dspy.GEPA, metric=metric, reflection_lm=reflection_lm,
+                            max_metric_calls=400),
+    validation_data=0.5,
+)
+search = GridSearchCV(
+    est,
+    {"optimizer__reflection_minibatch_size": [3, 8], "optimizer__max_metric_calls": [400, 1200]},
+    cv=StratifiedKFold(3),
+    scoring="f1_macro",
+).fit(X, y)
+```
+
+Inside a `Pipeline` the keys gain the step prefix (`dspymator__optimizer__...`). Nothing needs metadata routing: optimizer settings are hyperparameters, not per-row metadata. Prefer a `validation_data` fraction over a fixed `(X_val, y_val)` inside CV, so each fold validates on its own rows.
+
 ### Few-Shot Learning with Bootstrap
 
 For few-shot learning, use `BootstrapFewShot` to automatically select good demonstrations:
@@ -218,6 +244,37 @@ few_shot_classifier.fit(
 
 predictions = few_shot_classifier.predict(test_reviews[["review_text"]])
 ```
+
+### Probabilities and Decision Models (TypeSafe)
+
+With dspy>=3.4, a single output typed as `bool`, `Literal[...]`, or dspy's
+experimental `Noul`/`Choice`/`Score` makes DSPyMator a probabilistic classifier:
+`predict_proba` and `classes_` work, so sklearn scorers like `roc_auc` and
+`neg_log_loss` do too.
+
+`lm` also accepts TypeSafe's non-generative System One models, which answer
+typed decisions with probabilities instead of writing text. Use `dspy.Predict`
+and give every output field a `desc`:
+
+```python
+from dspy.experimental import TypeSafe
+from sklearn.model_selection import cross_val_score
+
+class Satire(dspy.Signature):
+    """Decide whether a news headline is satire."""
+    headline: str = dspy.InputField()
+    is_onion: bool = dspy.OutputField(desc="Is this headline from The Onion?")
+
+clf = DSPyMator(
+    program=dspy.Predict(Satire),
+    target_names="is_onion",
+    lm=TypeSafe("jev-latest"),  # reads TYPESAFE_API_KEY
+)
+cross_val_score(clf, df.select("headline"), df["is_onion"], cv=5, scoring="roc_auc")
+```
+
+Optimizers still apply: instructions and demos are sent to the model. GEPA's
+`reflection_lm` must be a generative LM.
 
 ### Advanced: Custom Multi-Input Features
 
@@ -365,6 +422,8 @@ llm_pipeline = make_pipeline(
 | `use_async` | `bool` | `True` | Use async execution for batch predictions |
 | `max_concurrent` | `int` | `50` | Maximum concurrent requests in async mode |
 | `verbose` | `bool` | `True` | Show progress bars during prediction |
+| `optimizer` | `DSPyOptimizer \| dspy optimizer \| None` | `None` | Optimizer run on every fit; wrap in `DSPyOptimizer` to grid-search its settings |
+| `validation_data` | `tuple \| float \| None` | `None` | Default validation data for the optimizer (see below) |
 
 ### fit() Parameters
 
@@ -372,5 +431,5 @@ llm_pipeline = make_pipeline(
 |-----------|------|---------|-------------|
 | `X` | DataFrame/array | *required* | Training features |
 | `y` | Series/array | *required* | Target values (can be `None` for unsupervised) |
-| `optimizer` | `dspy.Optimizer \| None` | `None` | DSPy optimizer instance (e.g., `dspy.GEPA`, `dspy.BootstrapFewShot`) |
+| `optimizer` | `dspy.Optimizer \| None` | `None` | Overrides the constructor `optimizer` for this fit |
 | `validation_data` | `tuple \| float \| None` | `None` | Validation data as `(X_val, y_val)`, a float for train split fraction, or `None` |
