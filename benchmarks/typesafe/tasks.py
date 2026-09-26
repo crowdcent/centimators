@@ -8,6 +8,7 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 import polars as pl
 
 HF = "https://huggingface.co/datasets/{repo}/resolve/main/{file}"
@@ -126,6 +127,39 @@ def _read(task: Task, file: str) -> pl.DataFrame:
         pl.col(task.text_col).alias("text"),
         pl.col(task.label_col).replace_strict(task.labels).alias("label"),
     ).unique("text", keep="first", maintain_order=True)
+
+
+SIZES = [16, 64, 256, 1024, 4000]
+SEEDS = [0, 1, 2]
+
+
+def subsample(train: pl.DataFrame, n: int, seed: int) -> pl.DataFrame:
+    """The labeled set every method gets at budget `n` and `seed` (stratified)."""
+    if n >= len(train):
+        return train
+    from sklearn.model_selection import train_test_split
+
+    idx, _ = train_test_split(
+        np.arange(len(train)), train_size=n, stratify=train["label"], random_state=seed
+    )
+    return train[np.sort(idx)]
+
+
+def split_val(labeled: pl.DataFrame, frac: float, seed: int):
+    """Stratified (fit, validation) split inside a labeled budget."""
+    from sklearn.model_selection import train_test_split
+
+    fit, val = train_test_split(
+        np.arange(len(labeled)),
+        test_size=frac,
+        stratify=labeled["label"],
+        random_state=seed,
+    )
+    return labeled[np.sort(fit)], labeled[np.sort(val)]
+
+
+def seeds_for(n: int) -> list[int]:
+    return [0] if n >= N_TRAIN_POOL else SEEDS
 
 
 def load_task(name: str) -> tuple[pl.DataFrame, pl.DataFrame]:

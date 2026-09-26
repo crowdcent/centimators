@@ -13,6 +13,29 @@ def save_preds(path, test, proba, classes):
     )
 
 
+def write_run(out_dir, task, method, n, seed, test, proba, classes, **extra):
+    """One ablation cell: <task>__<method>__n<n>__s<seed>.{json,parquet}."""
+    import json
+    from pathlib import Path
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stem = f"{task}__{method}__n{n}__s{seed}"
+    save_preds(out_dir / f"{stem}.parquet", test, proba, classes)
+    row = {
+        "task": task,
+        "method": method,
+        "n_labels": n,
+        "seed": seed,
+        **score(test["label"].to_numpy(), proba, classes),
+        **calibration(test["label"].to_numpy(), proba, classes),
+        **extra,
+    }
+    (out_dir / f"{stem}.json").write_text(json.dumps(row, indent=2))
+    print(json.dumps({k: v for k, v in row.items() if k != "instructions"}), flush=True)
+    return row
+
+
 def calibration(y_true, proba, classes, bins=10) -> dict:
     """Top-label ECE, Brier score, and accuracy on the most confident 50% / 20% of rows."""
     proba = np.asarray(proba, dtype=float)
