@@ -21,6 +21,7 @@ Written and committed before any of these runs. Results that contradict a hypoth
 - Grid: `optimizer__reflection_minibatch_size` ∈ {3, 8} × `optimizer__max_metric_calls` ∈ {500, 1,500}.
 - The selected setting is refit on all 256 labels (`refit=True`) and scored once on the test set.
 - H2: the CV-selected setting beats the fixed default (ablation `jev_gepa` at 256) on mean F1. No prediction on size of effect.
+- Amendment (2026-09-26 15:40 UTC, before any E2 result existed): E2 runs on seed 0 only. Each grid is 13 GEPA fits and the runs are limited to the VM's 2 CPUs; three seeds would take ~6 hours. The comparison is against the default's seed-0 cell, with the paired bootstrap over test rows as the only uncertainty estimate.
 
 ## E3: stacking Jev with embeddings (scikit-learn composition)
 

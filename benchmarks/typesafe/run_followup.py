@@ -188,5 +188,5 @@ if __name__ == "__main__":
                 for n in (1024, 4000):
                     if not (OUT / f"{task}__jev_gepa__n{n}__s{seed}.json").exists():
                         guarded(e1_cell, task, n, seed)
-            elif not (OUT / f"{task}__jev_gepacv__n256__s{seed}.json").exists():
+            elif seed == 0 and not (OUT / f"{task}__jev_gepacv__n256__s0.json").exists():
                 guarded(e2_cell, task, seed)
