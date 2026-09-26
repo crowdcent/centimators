@@ -36,3 +36,14 @@ Written and committed before any of these runs. Results that contradict a hypoth
   - `stack_lr`: embeddings plus Jev probabilities
 - Jev probabilities are computed on the VM (API calls); the fits run on CrowdCent Cloud.
 - H3: `stack_lr` beats both `embed_lr` and Jev + GEPA at n ≥ 1,024. H3b: `jev_lr` lowers log loss vs raw Jev at every n ≥ 64.
+
+## E4: one learning curve to 3,000 labels, every method on the same grid (added 2026-09-26 23:10 UTC, before any E4 run)
+
+- Grid: n ∈ {16, 64, 256, 1,024, 3,000}, seeds 0/1/2 at every n and for every method. At 3,000 the three seeds draw three different stratified subsets of the 4,000-row pool, so every point on the curve is a 3-seed mean. The n = 4,000 cells (1 seed) are dropped from the figure.
+- Trained on the n labels, one line each:
+  - `tfidf_lr`, `embed_lr`: unchanged protocol (`LogisticRegressionCV` inside the labeled set).
+  - `roberta_ft` (roberta-base), `mbert_ft` (answerdotai/ModernBERT-base), `mbertl_ft` (answerdotai/ModernBERT-large): one fine-tuning protocol for all three. Batch 16, max length 128, AdamW (weight decay 0.01), one-cycle schedule, max(3 epochs, 150 steps). Learning rate picked from {1e-5, 2e-5, 5e-5, 8e-5} by log loss on a stratified 20% split of the labeled set, then scored once on test. bf16 autocast when the GPU supports it, identically for all three. RoBERTa is rerun under this protocol (the old grid lacked 8e-5, which ModernBERT's authors recommend), so the three encoders differ only in the checkpoint. Runs on CrowdCent Cloud GPU.
+  - `jev_gepa`, `luna_gepa`: the GEPA rule already used at every n: validation split min(n/2, 256) rows, metric-call budget 300 + 2·min(n, 1,024), Brier metric with written feedback, GPT-6 Sol reflection. Same code path for both models; only the LM differs. At 3,000 labels the budget cap means GEPA reads only part of the data; that is a stated limit, not tuned away. Runs on the VM (API calls).
+- Zero-label references (horizontal lines): `jev_zeroshot`, `luna_zeroshot`.
+- `luna_fewshot` (labels pasted into every prompt) stays at n ≤ 256: at 3,000 examples each call carries roughly 100-150k tokens, about $15-35 per 1,000 rows. It is shown where it exists.
+- The test set scores finished models only. Figure: mean macro-F1 over 3 seeds, bars/bands = min-max over seeds.

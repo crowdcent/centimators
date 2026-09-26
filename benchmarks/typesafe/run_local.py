@@ -5,7 +5,7 @@
 #   "numpy",
 #   "scikit-learn>=1.6",
 #   "torch",
-#   "transformers>=4.44",
+#   "transformers>=4.48",
 #   "sentence-transformers>=3.0",
 #   "sentencepiece",
 #   "protobuf",
@@ -18,7 +18,7 @@ Runs on CrowdCent Cloud (gpu_s).
 
 Every method gets the same tuning courtesy as GEPA: hyperparameters are chosen
 inside the labeled budget only (CV for logistic regression, a stratified 20%
-validation split for RoBERTa's learning rate). Writes out/abl/<cell>.{json,parquet}.
+validation split for each encoder's learning rate). Writes out/lc/<cell>.{json,parquet}.
 """
 
 import argparse
@@ -35,15 +35,19 @@ from sklearn.pipeline import make_pipeline
 from metrics import write_run
 from tasks import SIZES, TASKS, load_task, seeds_for, split_val, subsample
 
-OUT = Path("out/abl")
+OUT = Path("out/lc")
 GPU_USD_PER_HOUR = 1.10
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 EMBEDDER = "BAAI/bge-base-en-v1.5"
 NLI = "MoritzLaurer/deberta-v3-large-zeroshot-v2.0"
-FINETUNE = "FacebookAI/roberta-base"
-FT_SIZES = [64, 256, 1024, 4000]
-FT_LRS = [1e-5, 3e-5, 5e-5]
+ENCODERS = {
+    "roberta": ("roberta_ft", "FacebookAI/roberta-base"),
+    "mbert": ("mbert_ft", "answerdotai/ModernBERT-base"),
+    "mbertl": ("mbertl_ft", "answerdotai/ModernBERT-large"),
+}
+FT_LRS = [1e-5, 2e-5, 5e-5, 8e-5]
 MIN_STEPS = 150
+BF16 = DEVICE == "cuda" and torch.cuda.is_bf16_supported()
 
 
 def gpu_usd(seconds):
@@ -178,12 +182,13 @@ def _batches(tok, texts, bs):
         ).to(DEVICE)
 
 
-def _train(tok, texts, y, lr, seed, n_classes):
+def _train(checkpoint, tok, texts, y, lr, seed, n_classes):
     from transformers import AutoModelForSequenceClassification
 
     torch.manual_seed(seed)
+    extra = {"reference_compile": False} if "ModernBERT" in checkpoint else {}
     model = AutoModelForSequenceClassification.from_pretrained(
-        FINETUNE, num_labels=n_classes
+        checkpoint, num_labels=n_classes, **extra
     ).to(DEVICE)
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.01)
     bs = 16
@@ -204,7 +209,9 @@ def _train(tok, texts, y, lr, seed, n_classes):
                 padding=True,
                 return_tensors="pt",
             ).to(DEVICE)
-            model(**enc, labels=y[b].to(DEVICE)).loss.backward()
+            with torch.autocast("cuda", dtype=torch.bfloat16, enabled=BF16):
+                loss = model(**enc, labels=y[b].to(DEVICE)).loss
+            loss.backward()
             opt.step()
             sched.step()
             opt.zero_grad()
@@ -216,17 +223,22 @@ def _predict(model, tok, texts):
     probs = []
     with torch.no_grad():
         for enc in _batches(tok, texts, 64):
-            probs.append(torch.softmax(model(**enc).logits.float(), -1).cpu().numpy())
+            with torch.autocast("cuda", dtype=torch.bfloat16, enabled=BF16):
+                logits = model(**enc).logits
+            probs.append(torch.softmax(logits.float(), -1).cpu().numpy())
     return np.vstack(probs)
 
 
-def run_finetune(name, train, test, classes):
+def run_finetune(name, train, test, classes, encoder):
     from transformers import AutoTokenizer
 
-    tok = AutoTokenizer.from_pretrained(FINETUNE)
+    method, checkpoint = ENCODERS[encoder]
+    tok = AutoTokenizer.from_pretrained(checkpoint)
     label_id = {c: i for i, c in enumerate(classes)}
-    for n in FT_SIZES:
+    for n in SIZES:
         for seed in seeds_for(n):
+            if (OUT / f"{name}__{method}__n{n}__s{seed}.json").exists():
+                continue
             labeled = subsample(train, n, seed)
             fit, val = split_val(labeled, 0.2, seed)
             y_fit = torch.tensor([label_id[c] for c in fit["label"]])
@@ -235,7 +247,7 @@ def run_finetune(name, train, test, classes):
             best = None
             for lr in FT_LRS:
                 model = _train(
-                    tok, fit["text"].to_list(), y_fit, lr, seed, len(classes)
+                    checkpoint, tok, fit["text"].to_list(), y_fit, lr, seed, len(classes)
                 )
                 p = np.clip(_predict(model, tok, val["text"].to_list()), 1e-6, 1)
                 val_loss = -np.log(p[np.arange(len(y_val)), y_val]).mean()
@@ -250,7 +262,7 @@ def run_finetune(name, train, test, classes):
             write_run(
                 OUT,
                 name,
-                "roberta_ft",
+                method,
                 n,
                 seed,
                 test,
@@ -261,6 +273,9 @@ def run_finetune(name, train, test, classes):
                 tune_seconds=fit_secs,
                 tune_usd=gpu_usd(fit_secs),
                 lr=best[1],
+                lr_val_loss=float(best[0]),
+                checkpoint=checkpoint,
+                bf16=BF16,
             )
             del best
             torch.cuda.empty_cache()
@@ -269,14 +284,15 @@ def run_finetune(name, train, test, classes):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--tasks", default=",".join(TASKS))
-    ap.add_argument("--methods", default="tfidf,embed,nli,finetune")
+    ap.add_argument("--methods", default="tfidf,embed,roberta,mbert,mbertl")
     args, _ = ap.parse_known_args()
     methods = args.methods.split(",")
 
     from sentence_transformers import SentenceTransformer
     from transformers import pipeline
 
-    print("device", DEVICE, flush=True)
+    gpu = torch.cuda.get_device_name(0) if DEVICE == "cuda" else "cpu"
+    print("device", DEVICE, gpu, "bf16", BF16, flush=True)
     embedder = (
         SentenceTransformer(EMBEDDER, device=DEVICE) if "embed" in methods else None
     )
@@ -297,8 +313,9 @@ def main():
             run_embed(name, train, test, classes, embedder)
         if "nli" in methods:
             run_nli(name, task, test, classes, nli)
-        if "finetune" in methods:
-            run_finetune(name, train, test, classes)
+        for encoder in ENCODERS:
+            if encoder in methods:
+                run_finetune(name, train, test, classes, encoder)
     print("done", flush=True)
 
 

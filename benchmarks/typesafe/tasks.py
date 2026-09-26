@@ -129,7 +129,7 @@ def _read(task: Task, file: str) -> pl.DataFrame:
     ).unique("text", keep="first", maintain_order=True)
 
 
-SIZES = [16, 64, 256, 1024, 4000]
+SIZES = [16, 64, 256, 1024, 3000]
 SEEDS = [0, 1, 2]
 
 
