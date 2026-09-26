@@ -1,3 +1,4 @@
 .cache/
 results/
 *.log
+local_results.jsonl
