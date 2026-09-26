@@ -23,6 +23,11 @@ Written and committed before any of these runs. Results that contradict a hypoth
 - H2: the CV-selected setting beats the fixed default (ablation `jev_gepa` at 256) on mean F1. No prediction on size of effect.
 - Amendment (2026-09-26 15:40 UTC, before any E2 result existed): E2 runs on seed 0 only. Each grid is 13 GEPA fits and the runs are limited to the VM's 2 CPUs; three seeds would take ~6 hours. The comparison is against the default's seed-0 cell, with the paired bootstrap over test rows as the only uncertainty estimate.
 
+- Amendment 2 (2026-09-26 17:40 UTC, before any E2 result existed; no E2 cell has completed): E2 is the headline experiment, so the seed-0 restriction is withdrawn.
+  - E2 runs seeds 0/1/2 at n = 256, then extends the CV-tuned learning curve to n = 64 and n = 1,024 (3 seeds each) in that priority order. The grid is unchanged. The validation fraction inside each CV fold is min(0.5, 128 / fold size): 0.5 at n = 64 and 256, and about 0.19 at n = 1,024, so GEPA's validation set stays at most 128 rows, in line with E1.
+  - New control `jev_gepa1500` at n = 256, 3 seeds: the default setting (minibatch 3, same half/half split as the ablation) at 1,500 metric calls, the largest budget in the grid. H2b: `jev_gepacv` beats `jev_gepa1500`. This separates "cross-validation picked better settings" from "the search got a larger budget".
+  - Every E2 comparison reports tuning cost (USD and wall-clock) next to F1. The search runs 13 GEPA fits (4 settings × 3 folds + refit), so it spends far more than one default fit, and that cost is part of the result.
+
 ## E3: stacking Jev with embeddings (scikit-learn composition)
 
 - Features: bge-base embeddings, and log of Jev zero-shot class probabilities. Jev has seen no labels, so its training-row probabilities carry no label leakage.

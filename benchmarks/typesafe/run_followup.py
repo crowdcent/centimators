@@ -2,10 +2,11 @@
 settings, and the Jev training-set probabilities that E3 stacks on CrowdCent Cloud.
 
     uv run python benchmarks/typesafe/run_followup.py e1 --tasks onion sst2
-    uv run python benchmarks/typesafe/run_followup.py e2 --tasks agnews
+    uv run python benchmarks/typesafe/run_followup.py e2 --sizes 256 64 1024
+    uv run python benchmarks/typesafe/run_followup.py control
     uv run python benchmarks/typesafe/run_followup.py jevfeat
 
-E1/E2 write results/abl/<task>__<method>__n<n>__s<seed>.{json,parquet}; skips cells already done.
+E1/E2/control write results/abl/<task>__<method>__n<n>__s<seed>.{json,parquet}; skips cells already done.
 """
 
 import argparse
@@ -28,13 +29,13 @@ from tasks import SEEDS, TASKS, load_task, split_val, subsample
 FEATURES = Path(__file__).parent / "results" / "features"
 
 
-def e1_cell(task_name, n, seed):
+def e1_cell(task_name, n, seed, budget=None, method="jev_gepa"):
     task = TASKS[task_name]
     train, test = load_task(task_name)
     labeled = subsample(train, n, seed)
     n_val = min(len(labeled) // 2, 256)
     fit, val = split_val(labeled, n_val / len(labeled), seed)
-    budget = 300 + 2 * min(n, 1024)
+    budget = budget or 300 + 2 * min(n, 1024)
     est = estimator(task, "jev")
     t0 = time.time()
     with dspy.track_usage() as tune_usage:
@@ -54,7 +55,7 @@ def e1_cell(task_name, n, seed):
     finish(
         est,
         task_name,
-        "jev_gepa",
+        method,
         n,
         seed,
         test,
@@ -75,6 +76,8 @@ def e2_cell(task_name, seed, n=256):
     task = TASKS[task_name]
     train, test = load_task(task_name)
     labeled = subsample(train, n, seed)
+    fold = len(labeled) * 2 // 3
+    val_frac = min(0.5, 128 / fold)
     base = DSPyMator(
         program=dspy.Predict(signature(task)),
         target_names="label",
@@ -91,7 +94,7 @@ def e2_cell(task_name, seed, n=256):
             num_threads=8,
             seed=seed,
         ),
-        validation_data=0.5,
+        validation_data=val_frac,
     )
     grid = {
         "optimizer__reflection_minibatch_size": [3, 8],
@@ -103,7 +106,7 @@ def e2_cell(task_name, seed, n=256):
         cv=StratifiedKFold(3, shuffle=True, random_state=seed),
         scoring=f1_from_proba,
         refit=True,
-        n_jobs=2,
+        n_jobs=4,
         error_score="raise",
     )
     t0 = time.time()
@@ -127,6 +130,7 @@ def e2_cell(task_name, seed, n=256):
         tune_seconds,
         best_params=search.best_params_,
         cv_scores=cv,
+        val_frac=val_frac,
     )
 
 
@@ -176,17 +180,32 @@ def guarded(fn, *args):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["e1", "e2", "jevfeat"])
+    ap.add_argument("mode", choices=["e1", "e2", "control", "jevfeat"])
     ap.add_argument("--tasks", nargs="*", default=list(TASKS))
+    ap.add_argument("--sizes", nargs="*", type=int, default=[256, 64, 1024])
     args = ap.parse_args()
-    for task in args.tasks:
-        if args.mode == "jevfeat":
+
+    def todo(task, method, n, seed):
+        return not (OUT / f"{task}__{method}__n{n}__s{seed}.json").exists()
+
+    if args.mode == "jevfeat":
+        for task in args.tasks:
             guarded(jevfeat, task)
-            continue
-        for seed in SEEDS:
-            if args.mode == "e1":
+    elif args.mode == "e1":
+        for task in args.tasks:
+            for seed in SEEDS:
                 for n in (1024, 4000):
-                    if not (OUT / f"{task}__jev_gepa__n{n}__s{seed}.json").exists():
+                    if todo(task, "jev_gepa", n, seed):
                         guarded(e1_cell, task, n, seed)
-            elif seed == 0 and not (OUT / f"{task}__jev_gepacv__n256__s0.json").exists():
-                guarded(e2_cell, task, seed)
+    elif args.mode == "control":
+        for seed in SEEDS:
+            for task in args.tasks:
+                if todo(task, "jev_gepa1500", 256, seed):
+                    guarded(e1_cell, task, 256, seed, 1500, "jev_gepa1500")
+    else:
+        # Size-major so every task gets its 3 seeds at 256 before the curve extends.
+        for n in args.sizes:
+            for seed in SEEDS:
+                for task in args.tasks:
+                    if todo(task, "jev_gepacv", n, seed):
+                        guarded(e2_cell, task, seed, n)
