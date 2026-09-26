@@ -3,3 +3,5 @@ results/
 *.log
 local_results.jsonl
 abl_*.log
+cloud_e3/
+fu_*.log

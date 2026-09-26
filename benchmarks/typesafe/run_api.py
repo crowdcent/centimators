@@ -43,6 +43,7 @@ def make_lm(kind):
             "jev-latest",
             api_key=os.environ.get("TYPESAFE_API_KEY", "PROXY_TYPESAFE_KEY"),
             cache=False,  # cached rows report no latency or tokens
+            timeout=60.0,
         )
     if kind == "gpt-6-luna":
         return dspy.LM(
