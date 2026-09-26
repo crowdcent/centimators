@@ -116,7 +116,11 @@ def _read(task: Task, file: str) -> pl.DataFrame:
     if not path.exists():
         with urllib.request.urlopen(HF.format(repo=task.repo, file=file)) as resp:
             path.write_bytes(resp.read())
-    readers = {".json": pl.read_ndjson, ".csv": pl.read_csv, ".parquet": pl.read_parquet}
+    readers = {
+        ".json": pl.read_ndjson,
+        ".csv": pl.read_csv,
+        ".parquet": pl.read_parquet,
+    }
     df = readers[path.suffix](path)
     return df.select(
         pl.col(task.text_col).alias("text"),

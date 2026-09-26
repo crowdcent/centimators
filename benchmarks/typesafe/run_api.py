@@ -15,10 +15,10 @@ from typing import Annotated, Literal
 import dspy
 import polars as pl
 from dspy.experimental import Choice, TypeSafe
-
-from centimators.model_estimators import DSPyMator
 from metrics import score
 from tasks import TASKS, load_task
+
+from centimators.model_estimators import DSPyMator
 
 OUT = Path(__file__).parent / "results"
 # USD per million tokens (input, output).
@@ -40,7 +40,9 @@ def signature_for(task):
 def make_lm(kind):
     if kind == "jev":
         return TypeSafe(
-            "jev-latest", api_key=os.environ.get("TYPESAFE_API_KEY", "PROXY_TYPESAFE_KEY")
+            "jev-latest",
+            api_key=os.environ.get("TYPESAFE_API_KEY", "PROXY_TYPESAFE_KEY"),
+            cache=False,  # cached rows report no latency or tokens
         )
     return dspy.LM(
         "openai/gpt-5-mini",

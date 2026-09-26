@@ -12,7 +12,13 @@ def score(y_true, proba, classes) -> dict:
     if len(classes) == 2:
         auc = roc_auc_score(y_true == classes[1], proba[:, 1])
     else:
-        auc = roc_auc_score(y_true, proba, labels=classes, multi_class="ovr")
+        order = np.argsort(classes)  # sklearn's multiclass AUC wants sorted labels
+        auc = roc_auc_score(
+            y_true,
+            proba[:, order],
+            labels=[classes[i] for i in order],
+            multi_class="ovr",
+        )
     return {
         "accuracy": float(accuracy_score(y_true, pred)),
         "macro_f1": float(f1_score(y_true, pred, labels=classes, average="macro")),
