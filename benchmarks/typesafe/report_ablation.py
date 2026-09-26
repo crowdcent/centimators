@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 from sklearn.metrics import f1_score
+
 from tasks import TASKS
 
 ABL = Path(__file__).parent / "results" / "abl"
@@ -46,7 +47,9 @@ def _preds(task, method, n):
     for f in sorted(ABL.glob(f"{task}__{method}__n{n}__s*.parquet")):
         p = pl.read_parquet(f)
         out.append(
-            np.asarray(classes)[p.select([f"p_{c}" for c in classes]).to_numpy().argmax(1)]
+            np.asarray(classes)[
+                p.select([f"p_{c}" for c in classes]).to_numpy().argmax(1)
+            ]
         )
     y = pl.read_parquet(f)["label"].to_numpy() if out else None
     return y, out
@@ -59,14 +62,33 @@ def paired_delta(task, a, b):
     if not pa or not pb:
         return None
     rng = np.random.default_rng(0)
-    idx = rng.integers(0, len(y), size=(B, len(y)))
+    w = rng.multinomial(len(y), np.full(len(y), 1 / len(y)), size=B).astype(float)
+    classes = np.unique(y)
 
-    def f1(y_, preds, ix):
-        return np.mean([f1_score(y_[ix], p[ix], average="macro") for p in preds])
+    def f1(preds):
+        """Seed-averaged macro-F1 under every bootstrap weight vector at once."""
+        out = []
+        for p in preds:
+            per_class = []
+            for c in classes:
+                tp = w @ ((y == c) & (p == c))
+                fp = w @ ((y != c) & (p == c))
+                fn = w @ ((y == c) & (p != c))
+                per_class.append(
+                    np.divide(
+                        2 * tp,
+                        2 * tp + fp + fn,
+                        out=np.zeros(B),
+                        where=(2 * tp + fp + fn) > 0,
+                    )
+                )
+            out.append(np.mean(per_class, axis=0))
+        return np.mean(out, axis=0)
 
-    full = f1(y, pa, slice(None)) - f1(y, pb, slice(None))
-    boots = np.array([f1(y, pa, i) - f1(y, pb, i) for i in idx[:500]])
-    lo, hi = np.percentile(boots, [2.5, 97.5])
+    full = np.mean([f1_score(y, p, average="macro") for p in pa]) - np.mean(
+        [f1_score(y, p, average="macro") for p in pb]
+    )
+    lo, hi = np.percentile(f1(pa) - f1(pb), [2.5, 97.5])
     return full, lo, hi
 
 

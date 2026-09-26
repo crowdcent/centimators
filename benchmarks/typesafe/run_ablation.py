@@ -185,8 +185,10 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--tasks", nargs="*", default=list(TASKS))
     ap.add_argument("--lms", nargs="*", default=list(LM_KIND))
+    ap.add_argument("--reverse", action="store_true", help="walk the grid backwards")
     args = ap.parse_args()
-    for task, lm, cond, n, seed in plan(args.tasks, args.lms):
+    grid = list(plan(args.tasks, args.lms))
+    for task, lm, cond, n, seed in reversed(grid) if args.reverse else grid:
         if (OUT / f"{task}__{lm}_{cond}__n{n}__s{seed}.json").exists():
             continue
         try:
