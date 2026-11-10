@@ -289,6 +289,26 @@ def test_cross_val_predict_proba_and_calibration(X):
     assert calibrated.predict_proba(X).shape == (10, 2)
 
 
+def test_stacking_with_classic_model(X):
+    from sklearn.compose import ColumnTransformer
+    from sklearn.ensemble import StackingClassifier
+    from sklearn.feature_extraction.text import CountVectorizer
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.pipeline import make_pipeline
+
+    y = np.array([True] * 4 + [False] * 6)
+    text = X["headline"].to_numpy().reshape(-1, 1)
+    bow = make_pipeline(
+        ColumnTransformer([("words", CountVectorizer(), 0)]), LogisticRegression()
+    )
+    stack = StackingClassifier(
+        [("llm", binary_clf()), ("bow", bow)],
+        final_estimator=LogisticRegression(),
+        cv=2,
+    )
+    assert stack.fit(text, y).predict_proba(text).shape == (10, 2)
+
+
 def test_reanchor_runs_through_fit(X):
     y = np.array([True] * 4 + [False] * 6)
     optimizer = ReAnchor(
