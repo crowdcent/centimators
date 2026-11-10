@@ -12,6 +12,8 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.metrics import accuracy_score, r2_score
 from sklearn.model_selection import train_test_split
 from sklearn.utils import ClassifierTags, RegressorTags
+from sklearn.utils.metaestimators import available_if
+from sklearn.utils.validation import check_is_fitted
 import narwhals as nw
 import numpy
 import dspy
@@ -175,9 +177,12 @@ class DSPyMator(TransformerMixin, BaseEstimator):
     def _lm_context(self):
         return dspy.context(lm=self.lm_) if self.lm_ is not None else dspy.context()
 
-    def _check_fitted(self):
-        if not self.__sklearn_is_fitted__():
-            raise ValueError("DSPyMator not fitted. Call fit() first.")
+    def _has_decision_target(self):
+        return self._decision_kind() is not None
+
+    def _is_classifier(self):
+        kind = self._decision_kind()
+        return kind is not None and not issubclass(kind, Score)
 
     # ------------------------------------------------------------- sklearn API
 
@@ -282,7 +287,7 @@ class DSPyMator(TransformerMixin, BaseEstimator):
         One target returns a 1-D array (bool or option labels for classifiers,
         floats for `Score` regressors); several targets return a 2-D array.
         """
-        self._check_fitted()
+        check_is_fitted(self)
         targets = self._targets()
         preds, _ = self._predict_raw(X)
         rows = [[_value(getattr(p, t)) for t in targets] for p in preds]
@@ -294,6 +299,7 @@ class DSPyMator(TransformerMixin, BaseEstimator):
             return numpy.array([r[0] for r in rows], dtype=dtype)
         return numpy.array(rows, dtype=object).reshape(len(rows), len(targets))
 
+    @available_if(_is_classifier)
     @nw.narwhalify
     def predict_proba(self, X):
         """Class probabilities, columns ordered as `classes_`.
@@ -301,11 +307,7 @@ class DSPyMator(TransformerMixin, BaseEstimator):
         Available when the single target is a `Noul`/`bool` or
         `Choice`/`Literal` decision output.
         """
-        self._check_fitted()
-        if not hasattr(self, "classes_"):
-            raise AttributeError(
-                "predict_proba needs a single Noul/bool or Choice/Literal target."
-            )
+        check_is_fitted(self)
         target = self._targets()[0]
         _, evidence = self._predict_raw(X)
         proba = numpy.empty((len(evidence), len(self.classes_)))
@@ -321,11 +323,10 @@ class DSPyMator(TransformerMixin, BaseEstimator):
                 proba[i] = [dist[str(c)] for c in self.classes_]
         return proba / proba.sum(axis=1, keepdims=True)
 
+    @available_if(_has_decision_target)
     def score(self, X, y, sample_weight=None):
         """Accuracy for classifiers, R^2 for `Score` regressors."""
         kind = self._decision_kind()
-        if kind is None:
-            raise AttributeError("score needs a single decision target.")
         metric = r2_score if issubclass(kind, Score) else accuracy_score
         return metric(
             _ensure_numpy(y, allow_series=True),
@@ -336,7 +337,7 @@ class DSPyMator(TransformerMixin, BaseEstimator):
     @nw.narwhalify
     def transform(self, X, y=None):
         """All output fields of the program as a dataframe (decisions as values)."""
-        self._check_fitted()
+        check_is_fitted(self)
         fields = list(self._signature_of(self.program_).output_fields)
         preds, _ = self._predict_raw(X)
         data = {f: [_value(getattr(p, f, None)) for p in preds] for f in fields}
@@ -344,11 +345,8 @@ class DSPyMator(TransformerMixin, BaseEstimator):
             return numpy.array([data[f] for f in fields], dtype=object).T
         return nw.from_dict(data, backend=nw.get_native_namespace(X))
 
-    def fit_transform(self, X, y=None, **fit_params):
-        return self.fit(X, y, **fit_params).transform(X)
-
     def get_feature_names_out(self, input_features=None):
-        self._check_fitted()
+        check_is_fitted(self)
         return numpy.array(
             list(self._signature_of(self.program_).output_fields), dtype=object
         )

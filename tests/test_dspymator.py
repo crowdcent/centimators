@@ -192,8 +192,7 @@ def test_score_target_is_regressor(X):
     pred = clf.predict(X)
     assert pred.dtype == float
     assert pred[0] == pytest.approx(1.6) and pred[4] == pytest.approx(0.4)
-    with pytest.raises(AttributeError):
-        clf.predict_proba(X)
+    assert not hasattr(clf, "predict_proba")
 
 
 def test_sync_and_async_agree(X):
@@ -345,8 +344,7 @@ def test_generative_target_is_plain_transformer():
     clf.fit(X)
     assert not is_classifier(clf) and not hasattr(clf, "classes_")
     np.testing.assert_array_equal(clf.predict(X), ["short", "short"])
-    with pytest.raises(AttributeError):
-        clf.predict_proba(X)
+    assert not hasattr(clf, "predict_proba") and not hasattr(clf, "score")
 
 
 def test_unfitted_and_bad_target(X):
