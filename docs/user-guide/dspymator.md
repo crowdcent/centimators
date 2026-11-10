@@ -61,7 +61,7 @@ classifier_program = dspy.Predict("review_text: str -> sentiment: str")
 sentiment_classifier = DSPyMator(
     program=classifier_program,
     target_names="sentiment",  # Which output field to use as predictions
-    lm="openai/gpt-4o-mini",   # Language model to use
+    lm="openai/gpt-6-luna",    # Language model to use
     temperature=0.0,            # Low temperature for consistent outputs
 )
 
@@ -243,7 +243,7 @@ gepa_optimizer = dspy.GEPA(
     metric=sentiment_metric,
     auto="light",  # or "medium", "heavy" for more thoroughness
     reflection_minibatch_size=20,
-    reflection_lm=dspy.LM(model="openai/gpt-4o-mini", temperature=1.0)
+    reflection_lm=dspy.LM("openai/gpt-6-luna", temperature=1.0)
 )
 
 # Pass the optimizer instance to the estimator; fit compiles a copy of the program
