@@ -180,6 +180,12 @@ GridSearchCV(clf, {"lm": [dspy.LM("typesafe:jev-latest"), dspy.LM("openai/gpt-6-
              cv=5, scoring="neg_log_loss").fit(X, y)
 ```
 
+A DSPyMator with an optimizer clones and cross-validates like any estimator, including
+inside `StackingClassifier`. Optimizer instances can't go in a `GridSearchCV` parameter
+grid, though: DSPy optimizers define `get_params()` without scikit-learn's `deep`
+argument, so scikit-learn fails to clone the grid values. Compare optimizers by
+cross-validating one DSPyMator per optimizer instead.
+
 **Calibrating decisions with ReAnchor.** `ReAnchor` fits each decision's threshold,
 cuts or option weights on the training set (no prompt changes), so it drops in as the
 optimizer:

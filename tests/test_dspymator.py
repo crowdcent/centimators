@@ -318,6 +318,24 @@ def test_reanchor_runs_through_fit(X):
     assert clf.score(X, y) == 1.0
 
 
+def test_stacking_with_optimizer(X):
+    from sklearn.ensemble import StackingClassifier
+    from sklearn.linear_model import LogisticRegression
+
+    y = np.array([True] * 4 + [False] * 6)
+    optimizer = ReAnchor(
+        lambda ex, pred, trace=None: float(pred.bullish == ex.bullish),
+        require_cache=False,
+    )
+    stack = StackingClassifier(
+        [("llm", binary_clf(optimizer=optimizer))],
+        final_estimator=LogisticRegression(),
+        cv=2,
+    ).fit(X, y)
+    assert stack.predict_proba(X).shape == (10, 2)
+    assert stack.estimators_[0].optimizer is not optimizer
+
+
 def test_transform_returns_values(X):
     clf = DSPyMator(
         program=dspy.Predict(Sentiment),
