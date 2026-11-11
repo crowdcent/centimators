@@ -61,7 +61,7 @@ classifier_program = dspy.Predict("review_text: str -> sentiment: str")
 sentiment_classifier = DSPyMator(
     program=classifier_program,
     target_names="sentiment",  # Which output field to use as predictions
-    lm="openai/gpt-4o-mini",   # Language model to use
+    lm="openai/gpt-6-luna",    # Language model to use
     temperature=0.0,            # Low temperature for consistent outputs
 )
 
@@ -130,6 +130,84 @@ predictions = multi_classifier.predict(test_reviews[["review_text"]])
 print(predictions.shape)  # (2, 2) - rows × outputs
 ```
 
+### Decision Models: Real Classifiers with `predict_proba`
+
+When the target is a DSPy decision output, DSPyMator is a native scikit-learn
+classifier (or regressor), whichever backend answers it:
+
+| Target annotation | Estimator | `predict` returns | `predict_proba` |
+|---|---|---|---|
+| `bool` or `Noul[...]` | binary classifier | `bool` array | `[P(False), P(True)]` |
+| `Literal[...]` or `Choice[...]` | multiclass classifier | option labels | one column per option, ordered as `classes_` |
+| `Score[...]` | regressor | expected level (float) | — |
+
+The backend can be [Jev](https://docs.typesafe.ai) (`"typesafe:jev-latest"`), which
+measures probabilities instead of generating text, any hosted LLM, or a local model
+served through `dspy.LM` (e.g. `"ollama_chat/qwen3"`). Generative LMs report their
+probabilities; DSPyMator switches the target to probability evidence in `fit`, so the
+same estimator works on every backend.
+
+```python
+from typing import Literal
+
+import dspy
+from dspy.experimental import ReAnchor
+from sklearn.model_selection import GridSearchCV, cross_val_score
+from centimators.model_estimators import DSPyMator
+
+
+class Sentiment(dspy.Signature):
+    """Classify the market sentiment of a financial news tweet."""
+
+    tweet: str = dspy.InputField()
+    sentiment: Literal["bearish", "neutral", "bullish"] = dspy.OutputField(
+        desc="Is the tweet bearish, neutral or bullish for the asset it mentions?"
+    )
+
+
+clf = DSPyMator(
+    program=dspy.Predict(Sentiment),
+    target_names="sentiment",
+    lm="typesafe:jev-latest",
+)
+clf.fit(X, y)
+clf.classes_                 # array(['bearish', 'bullish', 'neutral'], dtype=object)
+clf.predict_proba(X_test)    # (n, 3) probabilities
+
+# Everything that takes a classifier takes it
+cross_val_score(clf, X, y, cv=5, scoring="neg_log_loss")
+GridSearchCV(clf, {"lm": [dspy.LM("typesafe:jev-latest"), dspy.LM("openai/gpt-6-luna")]},
+             cv=5, scoring="neg_log_loss").fit(X, y)
+```
+
+A DSPyMator with an optimizer clones and cross-validates like any estimator, including
+inside `StackingClassifier`. Optimizer instances can't go in a `GridSearchCV` parameter
+grid, though: DSPy optimizers define `get_params()` without scikit-learn's `deep`
+argument, so scikit-learn fails to clone the grid values. Compare optimizers by
+cross-validating one DSPyMator per optimizer instead.
+
+**Calibrating decisions with ReAnchor.** `ReAnchor` fits each decision's threshold,
+cuts or option weights on the training set (no prompt changes), so it drops in as the
+optimizer:
+
+```python
+def agree(example, pred, trace=None):
+    return float(pred.sentiment == example.sentiment)
+
+calibrated = DSPyMator(
+    program=dspy.Predict(Sentiment),
+    target_names="sentiment",
+    lm="typesafe:jev-latest",
+    optimizer=ReAnchor(agree),
+).fit(X_train, y_train)
+
+calibrated.program_.fields["sentiment"]   # fitted option weights
+```
+
+**Stacking and calibration.** Because `predict_proba` is real, LLM decisions stack
+with classic models through `cross_val_predict(..., method="predict_proba")`,
+`StackingClassifier` or `CalibratedClassifierCV`.
+
 ### Prompt Optimization with GEPA
 
 The real magic happens when you use DSPy optimizers to automatically improve your prompts:
@@ -171,24 +249,20 @@ gepa_optimizer = dspy.GEPA(
     metric=sentiment_metric,
     auto="light",  # or "medium", "heavy" for more thoroughness
     reflection_minibatch_size=20,
-    reflection_lm=dspy.LM(model="openai/gpt-4o-mini", temperature=1.0)
+    reflection_lm=dspy.LM("openai/gpt-6-luna", temperature=1.0)
 )
 
-# Create a fresh classifier
+# Pass the optimizer instance to the estimator; fit compiles a copy of the program
 optimized_classifier = DSPyMator(
     program=dspy.Predict("review_text: str -> sentiment: str"),
     target_names="sentiment",
+    optimizer=gepa_optimizer,
 )
 
 # Fit with optimization (GEPA will improve the prompts)
-optimized_classifier.fit(
-    X, 
-    y, 
-    optimizer=gepa_optimizer,
-    validation_data=0.3  # Use 30% of data for validation
-)
+optimized_classifier.fit(X, y, validation_data=0.3)  # hold out 30% for GEPA's valset
 
-# The optimized program is now ready to use
+# The optimized program lives in program_; the original program is untouched
 predictions = optimized_classifier.predict(test_reviews[["review_text"]])
 ```
 
@@ -206,15 +280,11 @@ bootstrap_optimizer = dspy.BootstrapFewShot(
 few_shot_classifier = DSPyMator(
     program=dspy.ChainOfThought("review_text: str -> sentiment: str"),
     target_names="sentiment",
+    optimizer=bootstrap_optimizer,
 )
 
-# Fit with bootstrap (no validation_data needed)
-few_shot_classifier.fit(
-    X,
-    y,
-    optimizer=bootstrap_optimizer,
-    validation_data=None  # Few-shot optimizers only need trainset
-)
+# Few-shot optimizers only need the trainset
+few_shot_classifier.fit(X, y)
 
 predictions = few_shot_classifier.predict(test_reviews[["review_text"]])
 ```
@@ -258,7 +328,7 @@ DSPyMator accepts either a model string or a pre-configured `dspy.LM` object for
 classifier = DSPyMator(
     program=dspy.Predict("text -> label"),
     target_names="label",
-    lm="openai/gpt-4o-mini",
+    lm="openai/gpt-6-luna",
     temperature=0.0,
     max_tokens=1000,
 )
@@ -266,7 +336,7 @@ classifier = DSPyMator(
 
 **Using custom providers:**
 
-For custom API configuration, pass a pre-configured `dspy.LM` object. DSPy uses [LiteLLM](https://docs.litellm.ai/) under the hood, so any LiteLLM-supported provider works. Extra kwargs are passed through to LiteLLM:
+For custom API configuration, pass a pre-configured `dspy.LM` object. Leave `lm=None` to use the LM set with `dspy.configure`:
 
 ```python
 import dspy
@@ -279,7 +349,6 @@ classifier = DSPyMator(
         "openrouter/anthropic/claude-3-haiku",
         temperature=0.1,
         max_tokens=1000,
-        # Additional kwargs are passed to LiteLLM
     ),
 )
 ```
@@ -359,9 +428,10 @@ llm_pipeline = make_pipeline(
 | `program` | `dspy.Module` | *required* | DSPy module (e.g., `dspy.Predict`, `dspy.ChainOfThought`) with a signature defining input/output fields |
 | `target_names` | `str \| list[str]` | *required* | Output field name(s) to use as predictions |
 | `feature_names` | `list[str] \| None` | `None` | Column names mapping input data to signature fields. If `None`, inferred from dataframe columns |
-| `lm` | `str \| dspy.LM` | `"openai/gpt-5-nano"` | Language model - either a string identifier or a pre-configured `dspy.LM` object |
-| `temperature` | `float` | `1.0` | Sampling temperature (ignored if `lm` is a `dspy.LM` object) |
-| `max_tokens` | `int` | `16000` | Maximum tokens in responses (ignored if `lm` is a `dspy.LM` object) |
+| `lm` | `str \| dspy.LM \| None` | `None` | Model string, a pre-configured `dspy.LM`, or `None` for the LM set with `dspy.configure` |
+| `temperature` | `float \| None` | `None` | Sampling temperature (only when `lm` is a string) |
+| `max_tokens` | `int \| None` | `None` | Maximum tokens in responses (only when `lm` is a string) |
+| `optimizer` | DSPy optimizer \| `None` | `None` | Optimizer instance (e.g. `dspy.GEPA`, `dspy.BootstrapFewShot`, `ReAnchor`) compiled on a copy of the program in `fit` |
 | `use_async` | `bool` | `True` | Use async execution for batch predictions |
 | `max_concurrent` | `int` | `50` | Maximum concurrent requests in async mode |
 | `verbose` | `bool` | `True` | Show progress bars during prediction |
@@ -371,6 +441,5 @@ llm_pipeline = make_pipeline(
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `X` | DataFrame/array | *required* | Training features |
-| `y` | Series/array | *required* | Target values (can be `None` for unsupervised) |
-| `optimizer` | `dspy.Optimizer \| None` | `None` | DSPy optimizer instance (e.g., `dspy.GEPA`, `dspy.BootstrapFewShot`) |
+| `y` | Series/array | `None` | Target values (required when `optimizer` is set) |
 | `validation_data` | `tuple \| float \| None` | `None` | Validation data as `(X_val, y_val)`, a float for train split fraction, or `None` |

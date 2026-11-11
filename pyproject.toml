@@ -1,6 +1,6 @@
 [project]
 name = "centimators"
-version = "0.3.4"
+version = "0.4.0"
 description = "essential data transformers and model estimators for ML and data science competitions"
 readme = "README.md"
 authors = [
@@ -19,13 +19,13 @@ keras-jax = [
     "jaxlib>=0.4.31",
 ]
 dspy = [
-    "dspy>=2.6.24",
+    "dspy>=3.5.0",
 ]
 all = [
     "keras>=3.9.2",
     "jax>=0.6.31",
     "jaxlib>=0.4.31",
-    "dspy>=2.6.24",
+    "dspy>=3.5.0",
     "tqdm>=4.66.0",
     "umap-learn>=0.5.9.post2",
 ]

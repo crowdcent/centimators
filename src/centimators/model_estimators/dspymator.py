@@ -3,15 +3,22 @@ DSPyMator: A scikit-learn compatible wrapper for DSPy modules.
 """
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, get_args
 import asyncio
+import copy
 import warnings
 
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.metrics import accuracy_score, r2_score
 from sklearn.model_selection import train_test_split
+from sklearn.utils import ClassifierTags, RegressorTags
+from sklearn.utils.metaestimators import available_if
+from sklearn.utils.validation import check_is_fitted
 import narwhals as nw
 import numpy
 import dspy
+from dspy.adapters.decision import record_evidence
+from dspy.adapters.types.decision import Choice, Noul, Score, decision_type
 
 from centimators.narwhals_utils import _ensure_numpy
 
@@ -20,258 +27,236 @@ from centimators.narwhals_utils import _ensure_numpy
 class DSPyMator(TransformerMixin, BaseEstimator):
     """DSPyMator is a scikit-learn compatible wrapper for DSPy modules.
 
-    Integrates DSPy programs (e.g., ChainOfThought, Predict) into the centimators
-    ecosystem, enabling LLM-based predictions that work seamlessly with sklearn
-    pipelines, cross-validation, and other ML tooling. DSPyMator turns a
-    DSPy `Module` (e.g., `ChainOfThought`, `Predict`) and optimizer (e.g., `GEPA`,
-    `BootstrapFewShot`, `MIPROv2`) into a standard scikit-learn
-    estimator/transformer that operates on tabular rows.
+    Integrates DSPy programs (e.g., `Predict`, `ChainOfThought`) into the
+    centimators ecosystem so LLM predictions work with sklearn pipelines,
+    cross-validation, hyperparameter search, calibration and stacking. The
+    estimator is dataframe-agnostic through narwhals, accepting Polars, Pandas,
+    or numpy arrays. Input columns map to the program's input fields by
+    `feature_names`, column names, or position.
 
-    The estimator is dataframe-agnostic through narwhals, accepting Polars,
-    Pandas, or numpy arrays. Input features are automatically mapped to the DSPy
-    program's signature fields based on `feature_names` or column names.
+    Decision outputs:
+        When the target is a DSPy decision output, DSPyMator behaves like a
+        native sklearn classifier or regressor, whichever backend answers it
+        (Jev via `dspy.LM("typesafe:jev-latest")`, a hosted LLM, or a local
+        model served through `dspy.LM`):
 
-    Execution Modes:
-        By default, uses asynchronous execution (`use_async=True`) with bounded
-        concurrency for efficient batch processing. Set `use_async=False` for
-        synchronous execution. Async mode automatically handles nested event loops
-        (e.g., in Jupyter notebooks) when `nest_asyncio` is installed. Current async
-        support with asyncio means that concurrent requests are best handled for API
-        requests, rather than for fine-tuning of local models' weights.
+        - `Noul` or `bool` targets: binary classifier, `classes_ = [False, True]`.
+        - `Choice` or `Literal[...]` targets: multiclass classifier over the
+          declared options.
+        - `Score` targets: regressor on the continuous expected level.
 
-    Output Methods:
-        - `predict(X)`: Returns target predictions in the same format as input.
-          If input is numpy array, returns numpy array. If input is dataframe,
-          returns dataframe with target column(s). For single targets, returns
-          1D array or single-column dataframe. For multiple targets, returns
-          2D array or multi-column dataframe.
-        - `transform(X)`: Returns all output fields from the DSPy program
-          (including reasoning, intermediate steps, etc.) as a dataframe in the
-          same backend as the input. Use this to access full program outputs.
-
-    Progress Tracking:
-        When `verbose=True`, displays progress bars using tqdm. Requires `tqdm`
-        for sync mode and `tqdm.asyncio` for async mode. Falls back gracefully
-        if tqdm is not installed.
+        Classifiers expose `predict_proba` and `classes_`, so `log_loss`,
+        `roc_auc`, `CalibratedClassifierCV` and stacking work unchanged.
+        Probabilities are the backend's raw distribution, before thresholds or
+        weights. On Jev they are measured; on generative LMs the model reports
+        them.
 
     Optimization:
-        DSPyMator supports automatic prompt optimization via any DSPy optimizer.
-        Pass a configured optimizer instance (e.g., `dspy.GEPA`, `dspy.BootstrapFewShot`,
-        `dspy.MIPROv2`, etc.) to `fit()` to optimize prompts during training.
+        Pass any DSPy optimizer instance as `optimizer` (e.g., `dspy.GEPA`,
+        `dspy.BootstrapFewShot`, `dspy.experimental.ReAnchor`). `fit` compiles
+        a copy of the program with a copy of the optimizer and stores the
+        result in `program_`, so the parameters are never modified and the
+        estimator clones cleanly for `GridSearchCV` and `cross_val_score`.
 
-        Different optimizers have different requirements:
+        Some optimizers (e.g., `GEPA`, `MIPROv2`) want a validation set. Pass
+        `validation_data` to `fit` as `(X_val, y_val)` or as a fraction of
+        the training data to hold out.
 
-        - **Few-shot optimizers** (e.g., `BootstrapFewShot`, `LabeledFewShot`):
-          Only need `trainset`. Pass `validation_data=None`.
-
-        - **Instruction optimizers** (e.g., `GEPA`, `MIPROv2`, `COPRO`):
-          Need both `trainset` and `valset`. Provide validation data via `validation_data`.
-
-        - **Finetuning optimizers** (e.g., `BootstrapFinetune`):
-          May have specific requirements. Consult optimizer documentation.
-
-        To use optimization:
-
-        1. Create an optimizer instance:
-
-        ```python
-        # Example: GEPA for instruction optimization
-        gepa = dspy.GEPA(metric=my_metric, auto='light')
-
-        # Example: BootstrapFewShot for few-shot learning
-        bootstrap = dspy.BootstrapFewShot()
-
-        # Example: MIPROv2 for instruction optimization
-        mipro = dspy.MIPROv2(metric=my_metric)
-        ```
-
-        2. Pass the optimizer to fit():
-
-        ```python
-        # With validation split (for optimizers that need valset)
-        estimator.fit(X_train, y_train, optimizer=gepa, validation_data=0.2)
-
-        # With explicit validation set
-        estimator.fit(X_train, y_train, optimizer=gepa, validation_data=(X_val, y_val))
-
-        # Without validation (for optimizers that only need trainset)
-        estimator.fit(X_train, y_train, optimizer=bootstrap, validation_data=None)
-
-        # To use trainset as valset, pass it explicitly
-        estimator.fit(X_train, y_train, optimizer=gepa, validation_data=(X_train, y_train))
-        ```
-
-        After optimization, the original program is stored in `original_program_`
-        and optimizer results are available in `optimizer_results_` for inspection
-        (if the optimizer provides detailed results).
-
-        For more details on optimizers, see: https://dspy.ai/learn/optimization/optimizers/
+    Execution:
+        Predictions run asynchronously with bounded concurrency by default
+        (`use_async=True`). Inside a running event loop (e.g., Jupyter), async
+        mode needs `nest_asyncio`; otherwise it falls back to sync.
 
     Parameters:
-        program: DSPy module (e.g., dspy.ChainOfThought, dspy.Predict) with a signature
-            defining input and output fields. The signature must be accessible
-            via `.predict.signature` or `.signature`.
-        target_names: Field name(s) from the program's output signature to use
-            as predictions. Can be a single string or list of strings. These
-            fields are extracted and returned by `predict()`.
-        feature_names: Column names mapping input data to signature input fields.
-            If None, inferred from dataframe columns or uses signature field names
-            for numpy arrays. Must match the number of input fields in the signature.
-        lm: Language model - either a string identifier (e.g., "openai/gpt-4") or a
-            pre-configured `dspy.LM` object. Pass a `dspy.LM` directly when you need
-            custom configuration like `api_key` or `api_base` for providers like OpenRouter.
-            When passing an LM object, `temperature` and `max_tokens` are ignored.
-            Defaults to "openai/gpt-5-nano".
-        temperature: Sampling temperature for the language model. Defaults to 1.0.
-        max_tokens: Maximum tokens in model responses. Defaults to 16000.
-        use_async: Whether to use asynchronous execution for batch predictions.
-            Defaults to True. Set to False for synchronous execution.
-        max_concurrent: Maximum number of concurrent async requests when
-            `use_async=True`. Defaults to 50.
-        verbose: Whether to display progress bars during prediction. Defaults to True.
-            Requires `tqdm` package for sync mode or `tqdm.asyncio` for async mode.
+        program: DSPy module with a signature defining input and output fields.
+        target_names: Output field name(s) returned by `predict()`.
+        feature_names: Column names mapped, in order, to the signature's input
+            fields. If None, dataframe columns are used; numpy columns map to
+            the input fields by position.
+        lm: A `dspy.LM`, a model string (e.g., `"openai/gpt-6-luna"`,
+            `"typesafe:jev-latest"`, `"ollama_chat/qwen3"`), or None to use
+            the LM set with `dspy.configure`.
+        temperature: Sampling temperature, used only when `lm` is a string.
+        max_tokens: Maximum response tokens, used only when `lm` is a string.
+        optimizer: Optional DSPy optimizer instance run during `fit`.
+        use_async: Whether to predict asynchronously. Defaults to True.
+        max_concurrent: Maximum concurrent requests when `use_async=True`.
+        verbose: Whether to show progress bars (requires `tqdm`).
 
     Examples:
-        Basic usage with a ChainOfThought or Predict program:
-
         ```python
         import dspy
+        from typing import Literal
+        from sklearn.model_selection import cross_val_score
         from centimators.model_estimators import DSPyMator
 
-        # Create a DSPy program (e.g., Predict, ChainOfThought, etc.)
-        program = dspy.Predict("text -> sentiment")
 
-        # Create estimator
-        estimator = DSPyMator(
-            program=program,
-            target_names="sentiment"
+        class Sentiment(dspy.Signature):
+            \"\"\"Classify the sentiment of a financial headline.\"\"\"
+
+            headline: str = dspy.InputField()
+            sentiment: Literal["bearish", "neutral", "bullish"] = dspy.OutputField(
+                desc="Market sentiment of the headline."
+            )
+
+
+        clf = DSPyMator(
+            program=dspy.Predict(Sentiment),
+            target_names="sentiment",
+            lm="typesafe:jev-latest",
         )
-
-        X_train = pl.DataFrame({
-            "text": ["I love this product!", "This is terrible.", "It's okay."]
-        })
-        y_train = pl.Series(["positive", "negative", "neutral"])
-
-        # Fit and predict (get only target predictions)
-        estimator.fit(X_train, y_train)  # y_train can be None
-        predictions = estimator.predict(X_test)  # returns same type as X_test
-
-        # Get all outputs (including reasoning and other intermediate steps of the program)
-        full_outputs = estimator.transform(X_test)  # always returns dataframe
-
-        # With optimization:
-        import dspy
-
-        gepa = dspy.GEPA(metric=my_metric, auto='light')
-        estimator.fit(X_train, y_train, optimizer=gepa, validation_data=0.2)
+        cross_val_score(clf, X, y, cv=5, scoring="neg_log_loss")
         ```
     """
 
     program: dspy.Module
     target_names: str | list[str]
     feature_names: list[str] | None = None
-    lm: str | dspy.LM = "openai/gpt-5-nano"
-    temperature: float = 1.0
-    max_tokens: int = 16000
+    lm: str | dspy.LM | None = None
+    temperature: float | None = None
+    max_tokens: int | None = None
+    optimizer: Any = None
     use_async: bool = True
     max_concurrent: int = 50
     verbose: bool = True
 
-    def _get_signature(self):
-        """Extract signature from the DSPy program.
+    # ----------------------------------------------------------------- helpers
 
-        ChainOfThought stores signature in .predict.signature, while other
-        modules may expose it directly as .signature.
-        """
-        if hasattr(self.program, "predict") and hasattr(
-            self.program.predict, "signature"
-        ):
-            return self.program.predict.signature
-        elif hasattr(self.program, "signature"):
-            return self.program.signature
-        else:
-            raise ValueError(
-                f"Cannot extract signature from program of type {type(self.program)}. "
-                "Expected a DSPy module with .predict.signature or .signature attribute."
-            )
+    @staticmethod
+    def _signature_of(program):
+        """Signature of the program's first predictor (ChainOfThought nests it)."""
+        if hasattr(program, "predict") and hasattr(program.predict, "signature"):
+            return program.predict.signature
+        if hasattr(program, "signature"):
+            return program.signature
+        raise ValueError(
+            f"Cannot extract signature from program of type {type(program)}. "
+            "Expected a DSPy module with .predict.signature or .signature attribute."
+        )
 
-    def __post_init__(self):
-        self.signature_ = self._get_signature()
-        if isinstance(self.target_names, str):
-            self._target_names = [self.target_names]
-        else:
-            self._target_names = list(self.target_names)
-
-        if not self._target_names:
+    def _targets(self):
+        targets = (
+            [self.target_names]
+            if isinstance(self.target_names, str)
+            else list(self.target_names)
+        )
+        if not targets:
             raise ValueError("target_names must contain at least one field.")
+        return targets
+
+    def _decision_kind(self):
+        """Decision type of the single target field, or None."""
+        targets = self._targets()
+        if len(targets) != 1:
+            return None
+        field = self._signature_of(self.program).output_fields.get(targets[0])
+        if field is None:
+            raise ValueError(f"Target {targets[0]!r} is not an output field.")
+        return decision_type(field)
+
+    @staticmethod
+    def _classes_for(kind):
+        if issubclass(kind, Noul):
+            return numpy.array([False, True])
+        values = get_args(kind.model_fields["value"].annotation)
+        return numpy.array(sorted(values, key=str), dtype=object)
+
+    def _resolve_lm(self):
+        if self.lm is None or isinstance(self.lm, dspy.BaseLM):
+            return self.lm
+        kwargs = {
+            k: v
+            for k, v in (
+                ("temperature", self.temperature),
+                ("max_tokens", self.max_tokens),
+            )
+            if v is not None
+        }
+        return dspy.LM(self.lm, **kwargs)
+
+    def _lm_context(self):
+        return dspy.context(lm=self.lm_) if self.lm_ is not None else dspy.context()
+
+    def _has_decision_target(self):
+        return self._decision_kind() is not None
+
+    def _is_classifier(self):
+        kind = self._decision_kind()
+        return kind is not None and not issubclass(kind, Score)
+
+    # ------------------------------------------------------------- sklearn API
+
+    def __sklearn_tags__(self):
+        tags = super().__sklearn_tags__()
+        kind = self._decision_kind()
+        if kind is None:
+            return tags
+        if issubclass(kind, Score):
+            tags.estimator_type = "regressor"
+            tags.regressor_tags = RegressorTags()
+        else:
+            tags.estimator_type = "classifier"
+            tags.classifier_tags = ClassifierTags(multi_class=issubclass(kind, Choice))
+        return tags
+
+    def __sklearn_clone__(self):
+        # DSPy optimizers expose get_params() without sklearn's deep argument and
+        # have no set_params, so sklearn's default clone cannot rebuild them.
+        params = self.get_params(deep=False)
+        params["optimizer"] = copy.copy(params["optimizer"])
+        return type(self)(**params)
+
+    def __sklearn_is_fitted__(self):
+        return hasattr(self, "program_")
 
     @nw.narwhalify
-    def fit(
-        self,
-        X,
-        y,
-        optimizer: Any | None = None,
-        validation_data: "tuple[Any, Any] | float | None" = None,
-        **kwargs,
-    ):
-        """Fit the DSPyMator estimator.
+    def fit(self, X, y=None, validation_data: "tuple[Any, Any] | float | None" = None):
+        """Fit the estimator, running `optimizer` on a copy of `program` if set.
 
         Parameters:
             X: Training data (dataframe or numpy array).
-            y: Target values (can be None for unsupervised tasks).
-            optimizer: Optional DSPy optimizer instance (e.g., dspy.GEPA, dspy.BootstrapFewShot,
-                dspy.MIPROv2). When provided, enables prompt optimization or finetuning during fit.
-            validation_data: Validation data for optimizers that require it.
-                - If tuple: Use as (X_val, y_val) directly.
-                - If float (0-1): Fraction of training data to use for validation.
-                - If None: No validation set (for optimizers that only need trainset).
-                  To use trainset as valset, pass `(X, y)` explicitly, although some
-                  optimizers may automatically use the trainset as valset if None is passed.
+            y: Target values. Optional when no optimizer is set.
+            validation_data: Validation data for optimizers that use it, as
+                `(X_val, y_val)` or a float fraction of `X` to hold out.
 
         Returns:
             self: The fitted estimator.
-
-        Examples:
-            Basic fitting without optimization:
-
-            ```python
-            estimator = DSPyMator(program=program, target_names='label')
-            estimator.fit(X_train, y_train)
-            ```
-
-            With optimizer using auto-split validation:
-
-            ```python
-            gepa_optimizer = dspy.GEPA(metric=my_metric, auto='light', ..., **kwargs)
-            estimator.fit(X_train, y_train, optimizer=gepa_optimizer, validation_data=0.2)
-            ```
         """
-        if isinstance(self.lm, dspy.LM):
-            self.lm_ = self.lm
-        else:
-            self.lm_ = dspy.LM(
-                self.lm, temperature=self.temperature, max_tokens=self.max_tokens
+        signature = self._signature_of(self.program)
+        targets = self._targets()
+        missing = [t for t in targets if t not in signature.output_fields]
+        if missing:
+            raise ValueError(
+                f"target_names {missing} are not output fields of the program."
             )
 
-        self.input_fields_ = list(self.signature_.input_fields.keys())
-
-        if self.feature_names is None:
-            if isinstance(X, numpy.ndarray):
-                self.feature_names = self.input_fields_
-            else:
-                self.feature_names = list(X.columns)
-
-        if len(self.feature_names) != len(self.input_fields_):
+        self.lm_ = self._resolve_lm()
+        self.input_fields_ = list(signature.input_fields)
+        if self.feature_names is not None:
+            columns = list(self.feature_names)
+        elif isinstance(X, numpy.ndarray):
+            columns = self.input_fields_
+        else:
+            columns = list(X.columns)
+        if len(columns) != len(self.input_fields_):
             raise ValueError(
-                f"Number of feature_names ({len(self.feature_names)}) must match "
+                f"Number of feature_names ({len(columns)}) must match "
                 f"number of input_fields ({len(self.input_fields_)})"
             )
+        self.feature_names_in_ = numpy.array(columns, dtype=object)
+        self.n_features_in_ = len(columns)
 
-        # Optimization if requested
-        if optimizer is not None:
-            # Handle validation_data parameter
+        kind = self._decision_kind()
+        if kind is not None and not issubclass(kind, Score):
+            self.classes_ = self._classes_for(kind)
+
+        program = self.program.deepcopy()
+        if kind is not None:
+            _request_evidence(program, targets[0], kind)
+        if self.optimizer is not None:
+            if y is None:
+                raise ValueError("An optimizer needs y to build its trainset.")
             if isinstance(validation_data, float):
-                # Convert to numpy for sklearn compatibility
                 X_train, X_val, y_train, y_val = train_test_split(
                     _ensure_numpy(X),
                     _ensure_numpy(y, allow_series=True),
@@ -279,129 +264,143 @@ class DSPyMator(TransformerMixin, BaseEstimator):
                     random_state=42,
                 )
             elif validation_data is None:
-                # No validation set (for optimizers that only need trainset)
-                X_train, y_train = X, y
-                X_val, y_val = None, None
+                X_train, y_train, X_val, y_val = X, y, None, None
             else:
-                # Use provided validation set
                 X_train, y_train = X, y
                 X_val, y_val = validation_data
 
-            # Store original program before optimization
-            self.original_program_ = self.program
+            compile_kwargs = {"trainset": self._to_examples(X_train, y_train)}
+            if X_val is not None:
+                compile_kwargs["valset"] = self._to_examples(X_val, y_val)
+            optimizer = copy.copy(self.optimizer)
+            with self._lm_context():
+                program = optimizer.compile(program, **compile_kwargs)
+            self.optimizer_results_ = getattr(program, "detailed_results", None)
 
-            # Convert data to DSPy Examples
-            train_examples = self._convert_to_examples(X_train, y_train)
-            val_examples = (
-                self._convert_to_examples(X_val, y_val) if X_val is not None else None
-            )
-
-            # Run optimizer compilation
-            compile_kwargs = {
-                "trainset": train_examples,
-                **({"valset": val_examples} if val_examples is not None else {}),
-                **kwargs,
-            }
-
-            with dspy.context(lm=self.lm_):
-                optimized_program = optimizer.compile(self.program, **compile_kwargs)
-
-            # Update program with optimized version
-            self.program = optimized_program
-
-            # Refresh signature and input_fields after optimization
-            self.signature_ = self._get_signature()
-            self.input_fields_ = list(self.signature_.input_fields.keys())
-
-            # Store optimizer results for inspection
-            if hasattr(optimized_program, "detailed_results"):
-                self.optimizer_results_ = optimized_program.detailed_results
-
-        self._is_fitted = True
+        self.program_ = program
         return self
 
     @nw.narwhalify
-    def _convert_to_examples(self, X, y):
-        """Convert X, y data to DSPy Example objects.
+    def predict(self, X):
+        """Target predictions as a numpy array.
 
-        Parameters:
-            X: Input features (dataframe or numpy array). Can be None.
-            y: Target values. Can be None.
-
-        Returns:
-            List of dspy.Example objects with inputs marked, or None if X is None.
+        One target returns a 1-D array (bool or option labels for classifiers,
+        floats for `Score` regressors); several targets return a 2-D array.
         """
-        if X is None:
-            return None
+        check_is_fitted(self)
+        targets = self._targets()
+        preds, _ = self._predict_raw(X)
+        rows = [[_value(getattr(p, t)) for t in targets] for p in preds]
+        if len(targets) == 1:
+            if hasattr(self, "classes_"):
+                dtype = self.classes_.dtype
+            else:
+                dtype = float if self._decision_kind() is not None else object
+            return numpy.array([r[0] for r in rows], dtype=dtype)
+        return numpy.array(rows, dtype=object).reshape(len(rows), len(targets))
 
-        examples = []
+    @available_if(_is_classifier)
+    @nw.narwhalify
+    def predict_proba(self, X):
+        """Class probabilities, columns ordered as `classes_`.
 
-        # Build input kwargs for each row
+        Available when the single target is a `Noul`/`bool` or
+        `Choice`/`Literal` decision output.
+        """
+        check_is_fitted(self)
+        target = self._targets()[0]
+        _, evidence = self._predict_raw(X)
+        proba = numpy.empty((len(evidence), len(self.classes_)))
+        for i, row in enumerate(evidence):
+            answer = row.get(target)
+            if answer is None:
+                raise ValueError(f"No decision evidence recorded for {target!r}.")
+            if "noul" in answer:
+                p = float(answer["noul"])
+                proba[i] = (1.0 - p, p)
+            else:
+                dist = {str(k): float(v) for k, v in answer["probabilities"].items()}
+                proba[i] = [dist[str(c)] for c in self.classes_]
+        return proba / proba.sum(axis=1, keepdims=True)
+
+    @available_if(_has_decision_target)
+    def score(self, X, y, sample_weight=None):
+        """Accuracy for classifiers, R^2 for `Score` regressors."""
+        kind = self._decision_kind()
+        metric = r2_score if issubclass(kind, Score) else accuracy_score
+        return metric(
+            _ensure_numpy(y, allow_series=True),
+            self.predict(X),
+            sample_weight=sample_weight,
+        )
+
+    @nw.narwhalify
+    def transform(self, X, y=None):
+        """All output fields of the program as a dataframe (decisions as values)."""
+        check_is_fitted(self)
+        fields = list(self._signature_of(self.program_).output_fields)
+        preds, _ = self._predict_raw(X)
+        data = {f: [_value(getattr(p, f, None)) for p in preds] for f in fields}
         if isinstance(X, numpy.ndarray):
-            input_kwargs_list = [
-                {inp: val for inp, val in zip(self.input_fields_, row)} for row in X
-            ]
-        else:
-            input_kwargs_list = [
-                {
-                    inp: row[col]
-                    for inp, col in zip(self.input_fields_, self.feature_names)
-                }
-                for row in X.iter_rows(named=True)
-            ]
+            return numpy.array([data[f] for f in fields], dtype=object).T
+        return nw.from_dict(data, backend=nw.get_native_namespace(X))
 
-        # Add targets and create examples
-        for kwargs, label in zip(input_kwargs_list, y):
-            for i, target_name in enumerate(self._target_names):
-                kwargs[target_name] = label[i] if len(self._target_names) > 1 else label
+    def get_feature_names_out(self, input_features=None):
+        check_is_fitted(self)
+        return numpy.array(
+            list(self._signature_of(self.program_).output_fields), dtype=object
+        )
+
+    # -------------------------------------------------------------- execution
+
+    @nw.narwhalify
+    def _to_examples(self, X, y):
+        targets = self._targets()
+        examples = []
+        for kwargs, label in zip(
+            self._iter_inputs(X), _ensure_numpy(y, allow_series=True)
+        ):
+            labels = label if len(targets) > 1 else [label]
+            kwargs.update({t: _native(v) for t, v in zip(targets, labels)})
             examples.append(dspy.Example(**kwargs).with_inputs(*self.input_fields_))
-
         return examples
 
     @nw.narwhalify
-    def _iter_input_kwargs(self, X):
+    def _iter_inputs(self, X):
         if isinstance(X, numpy.ndarray):
             for row in X:
-                yield {inp: val for inp, val in zip(self.input_fields_, row)}
+                yield {f: _native(v) for f, v in zip(self.input_fields_, row)}
         else:
+            columns = list(self.feature_names_in_)
             for row in X.iter_rows(named=True):
-                yield {
-                    inp: row[col]
-                    for inp, col in zip(self.input_fields_, self.feature_names)
-                }
+                yield {f: row[c] for f, c in zip(self.input_fields_, columns)}
 
-    def _predict_raw_sync(self, X):
-        """Synchronously predict all samples with optional progress bar."""
-        input_kwargs = list(self._iter_input_kwargs(X))
+    def _call_sync(self, kwargs):
+        with record_evidence() as log:
+            pred = self.program_(**kwargs)
+        return pred, _last_evidence(log)
 
+    async def _call_async(self, kwargs, semaphore):
+        async with semaphore:
+            with record_evidence() as log:
+                pred = await self.program_.acall(**kwargs)
+            return pred, _last_evidence(log)
+
+    def _run_sync(self, inputs):
         if self.verbose:
             try:
                 from tqdm import tqdm
 
-                return [
-                    self.program(**kwargs)
-                    for kwargs in tqdm(input_kwargs, desc="DSPyMator predicting")
-                ]
+                inputs = tqdm(inputs, desc="DSPyMator predicting")
             except ImportError:
                 warnings.warn(
-                    "tqdm not installed; progress bar unavailable. Install tqdm for progress tracking.",
-                    stacklevel=2,
+                    "tqdm not installed; progress bar unavailable.", stacklevel=3
                 )
-                return [self.program(**kwargs) for kwargs in input_kwargs]
-        else:
-            return [self.program(**kwargs) for kwargs in input_kwargs]
+        return [self._call_sync(kwargs) for kwargs in inputs]
 
-    async def _predict_raw_async(self, X):
-        """Asynchronously predict all samples with bounded concurrency and optional progress bar."""
-        input_kwargs = list(self._iter_input_kwargs(X))
+    async def _run_async(self, inputs):
         semaphore = asyncio.Semaphore(self.max_concurrent)
-
-        async def run_one(kwargs):
-            async with semaphore:
-                return await self.program.acall(**kwargs)
-
-        tasks = [run_one(kwargs) for kwargs in input_kwargs]
-
+        tasks = [self._call_async(kwargs, semaphore) for kwargs in inputs]
         if self.verbose:
             try:
                 from tqdm.asyncio import tqdm as tqdm_asyncio
@@ -409,105 +408,67 @@ class DSPyMator(TransformerMixin, BaseEstimator):
                 return await tqdm_asyncio.gather(*tasks, desc="DSPyMator predicting")
             except ImportError:
                 warnings.warn(
-                    "tqdm not installed; progress bar unavailable. Install tqdm for progress tracking.",
-                    stacklevel=2,
+                    "tqdm not installed; progress bar unavailable.", stacklevel=3
                 )
-                return await asyncio.gather(*tasks)
-        else:
-            return await asyncio.gather(*tasks)
+        return await asyncio.gather(*tasks)
 
     def _predict_raw(self, X):
-        """Route to sync or async prediction based on use_async flag."""
-        with dspy.context(lm=self.lm_):
+        """Run the fitted program on every row: (predictions, evidence per row)."""
+        inputs = list(self._iter_inputs(X))
+        with self._lm_context():
             if not self.use_async:
-                return self._predict_raw_sync(X)
-
-            try:
-                asyncio.get_running_loop()
-                # Already in an event loop, use nest_asyncio to enable nested loops
-                try:
-                    import nest_asyncio
-
-                    nest_asyncio.apply()
-                    return asyncio.run(self._predict_raw_async(X))
-                except ImportError:
-                    warnings.warn(
-                        "nest_asyncio not installed; falling back to synchronous. "
-                        "Install nest_asyncio to use async mode in notebooks/event loops.",
-                        stacklevel=2,
-                    )
-                    return self._predict_raw_sync(X)
-            except RuntimeError:
-                # No event loop, safe to use asyncio.run
-                return asyncio.run(self._predict_raw_async(X))
-
-    @nw.narwhalify
-    def predict(self, X):
-        if not hasattr(self, "_is_fitted"):
-            raise ValueError("Classifier not fitted. Call fit() first.")
-        preds = self._predict_raw(X)
-        fields = self._target_names
-
-        if not preds:
-            if len(fields) == 1:
-                empty = numpy.array([], dtype=object)
+                results = self._run_sync(inputs)
             else:
-                empty = numpy.empty((0, len(fields)), dtype=object)
+                try:
+                    asyncio.get_running_loop()
+                except RuntimeError:
+                    results = asyncio.run(self._run_async(inputs))
+                else:
+                    try:
+                        import nest_asyncio
 
-            # Return numpy for numpy input, dataframe for dataframe input
-            if isinstance(X, numpy.ndarray):
-                return empty
-            col_names = fields if len(fields) > 1 else [fields[0]]
-            return nw.from_dict(
-                {name: [] for name in col_names}, backend=nw.get_native_namespace(X)
-            )
+                        nest_asyncio.apply()
+                        results = asyncio.run(self._run_async(inputs))
+                    except ImportError:
+                        warnings.warn(
+                            "nest_asyncio not installed; falling back to synchronous. "
+                            "Install nest_asyncio to use async mode in notebooks/event loops.",
+                            stacklevel=2,
+                        )
+                        results = self._run_sync(inputs)
+        return [p for p, _ in results], [e for _, e in results]
 
-        labels = numpy.array(
-            [[getattr(pred, field) for field in fields] for pred in preds]
-        )
-        predictions = labels.squeeze(axis=1) if len(fields) == 1 else labels
 
-        # Return numpy for numpy input, dataframe for dataframe input
-        if isinstance(X, numpy.ndarray):
-            return predictions
+def _request_evidence(program, target, kind):
+    """Decode `target` from probability evidence on every backend.
 
-        if len(fields) == 1:
-            return nw.from_dict(
-                {fields[0]: predictions}, backend=nw.get_native_namespace(X)
-            )
-        else:
-            cols = {fields[i]: predictions[:, i] for i in range(len(fields))}
-            return nw.from_dict(cols, backend=nw.get_native_namespace(X))
+    System One backends always answer decision outputs with a distribution;
+    generative LMs only do so for outputs configured in `Predict.fields`.
+    """
+    if issubclass(kind, Noul):
+        default = {"threshold": 0.5}
+    elif issubclass(kind, Score):
+        default = {"cuts": [i + 0.5 for i in range(len(kind.criteria()) - 1)]}
+    else:
+        default = {"weights": dict.fromkeys(kind.criteria(), 1.0)}
+    for _, predictor in program.named_predictors():
+        if (
+            target in predictor.signature.output_fields
+            and target not in predictor.fields
+        ):
+            predictor.fields[target] = copy.deepcopy(default)
 
-    def _get_output_fields(self):
-        """Get all output fields for transform."""
-        signature = self._get_signature()
-        output_fields = signature.output_fields.keys()
 
-        return output_fields
+def _value(output):
+    """Plain value of a program output (decision objects unwrap to `.value`)."""
+    return output.value if isinstance(output, (Noul, Choice, Score)) else output
 
-    @nw.narwhalify
-    def transform(self, X, y=None):
-        if not hasattr(self, "_is_fitted"):
-            raise ValueError("Classifier not fitted. Call fit() first.")
 
-        output_fields = self._get_output_fields()
-        preds = self._predict_raw(X)
+def _native(value):
+    """numpy scalars to Python scalars, so DSPy types validate strictly."""
+    return value.item() if isinstance(value, numpy.generic) else value
 
-        # Build a dictionary of columns
-        data = {
-            field: [getattr(pred, field, None) for pred in preds]
-            for field in output_fields
-        }
 
-        # Create a dataframe in the same backend as input X
-        return nw.from_dict(data, backend=nw.get_native_namespace(X))
-
-    def fit_transform(self, X, y=None, **kwargs):
-        return self.fit(X, y).transform(X, y, **kwargs)
-
-    def get_feature_names_out(self, input_features=None):
-        return self._get_output_fields()
-
-    def __sklearn_is_fitted__(self):
-        return getattr(self, "_is_fitted", False)
+def _last_evidence(log):
+    """Final evidence per output field (the last predictor to answer it wins)."""
+    return {name: answer for _, name, answer in log}
